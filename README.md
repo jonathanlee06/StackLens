@@ -1,4 +1,4 @@
-# StackLens
+# 🔍 StackLens
 
 <div align="center">
 
