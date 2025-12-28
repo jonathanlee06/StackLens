@@ -41,8 +41,7 @@ class ThemeManager @Inject constructor(
     }
 
     fun getDynamicColorEnabled(): Boolean {
-        // Default to true on Android 12+ devices
-        return sharedPreferences.getBoolean(DYNAMIC_COLOR_KEY, isDynamicColorSupported)
+        return sharedPreferences.getBoolean(DYNAMIC_COLOR_KEY, false)
     }
 
     fun setThemeMode(mode: ThemeMode) {

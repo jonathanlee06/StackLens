@@ -100,29 +100,47 @@ class CrashLogReader @Inject constructor(
      * Extract package name from crash log content
      */
     private fun extractPackageName(content: String, type: CrashType): String? {
+        // Common patterns that appear in most crash types
+        fun tryCommonPatterns(): String? {
+            // Process: com.example.app or Process: com.example.app:service
+            val processMatch = Regex("^Process:\\s*([\\w.]+)", RegexOption.MULTILINE).find(content)
+            if (processMatch != null) {
+                return processMatch.groupValues[1].split(":").firstOrNull()
+            }
+            // Package: com.example.app v1 (1.0)
+            val packageMatch = Regex("^Package:\\s*([\\w.]+)", RegexOption.MULTILINE).find(content)
+            if (packageMatch != null) {
+                return packageMatch.groupValues[1]
+            }
+            return null
+        }
+
         return when (type) {
             CrashType.DATA_APP_CRASH,
-            CrashType.SYSTEM_APP_CRASH -> {
-                // Format: Process: com.example.app
-                val processMatch = Regex("Process:\\s+([\\w.]+)").find(content)
-                processMatch?.groupValues?.get(1)
+            CrashType.SYSTEM_APP_CRASH,
+                -> {
+                tryCommonPatterns()
             }
             CrashType.DATA_APP_ANR,
-            CrashType.SYSTEM_APP_ANR -> {
-                // Format: ANR in com.example.app or Package: com.example.app
+            CrashType.SYSTEM_APP_ANR,
+                -> {
+                // ANR in com.example.app
                 val anrMatch = Regex("ANR in ([\\w.]+)").find(content)
-                    ?: Regex("Package:\\s+([\\w.]+)").find(content)
-                anrMatch?.groupValues?.get(1)
+                anrMatch?.groupValues?.get(1)?.split(":")?.firstOrNull()
+                    ?: tryCommonPatterns()
             }
             CrashType.SYSTEM_TOMBSTONE -> {
-                // Format: cmdline: com.example.app
-                val cmdlineMatch = Regex("cmdline:\\s+([\\w.]+)").find(content)
+                // cmdline: com.example.app or >>> com.example.app <<<
+                val cmdlineMatch = Regex("cmdline:\\s*([\\w.]+)").find(content)
+                    ?: Regex(">>>\\s*([\\w.]+)").find(content)
                 cmdlineMatch?.groupValues?.get(1)
+                    ?: tryCommonPatterns()
             }
             else -> {
-                // Try generic package pattern
-                val genericMatch = Regex("([a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+)").find(content)
-                genericMatch?.groupValues?.get(1)
+                tryCommonPatterns()
+                    ?: Regex("([a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*){2,})").find(content)?.groupValues?.get(
+                        1
+                    )
             }
         }
     }
@@ -142,7 +160,9 @@ class CrashLogReader @Inject constructor(
             val appInfo = packageManager.getApplicationInfo(packageName, 0)
             packageManager.getApplicationLabel(appInfo).toString()
         } catch (e: PackageManager.NameNotFoundException) {
-            null
+            e.printStackTrace()
+            // App not installed - return package name as fallback
+            packageName
         }
     }
 

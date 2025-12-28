@@ -13,6 +13,11 @@
         android:name="android.permission.READ_DROPBOX_DATA"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Query all packages to get app names and icons (Android 11+) -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <application
         android:name=".StackLensApp"
         android:allowBackup="true"

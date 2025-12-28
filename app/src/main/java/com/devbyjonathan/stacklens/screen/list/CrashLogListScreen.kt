@@ -1,9 +1,10 @@
 package com.devbyjonathan.stacklens.screen.list
 
-import android.widget.Space
+import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -27,28 +30,20 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -59,14 +54,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.devbyjonathan.stacklens.common.CrashTypeBadge
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.model.CrashTypeFilter
 import com.devbyjonathan.stacklens.model.SortOrder
+import com.devbyjonathan.stacklens.model.fake.PreviewData.sampleUiState
+import com.devbyjonathan.stacklens.theme.StackLensTheme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -89,9 +94,16 @@ fun CrashLogListContent(
     var showSortSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     Column(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { focusManager.clearFocus() }
     ) {
         CrashLogList(
             uiState = uiState,
@@ -274,7 +286,9 @@ fun CrashTypeFilterRow(
     val nativeCount = stats.filterKeys { it in CrashType.nativeTags }.values.sum()
 
     LazyRow(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp)
@@ -440,17 +454,9 @@ fun CrashLogList(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = {
-                    onSearchQueryChange(it)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = { Text("Search crashes...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true
+            Search(
+                searchQuery = searchQuery,
+                onSearchQueryChange = onSearchQueryChange
             )
         }
 
@@ -547,12 +553,13 @@ fun CrashLogItem(
                 ) {
                     Text(
                         text = crash.appName ?: crash.packageName ?: "Unknown",
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    CrashTypeBadge(type = crash.tag, color = color)
+                    CrashTypeBadge(type = crash.tag)
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -607,33 +614,6 @@ fun getCrashTypeIconAndColor(type: CrashType): Pair<ImageVector, Color> {
 }
 
 @Composable
-fun CrashTypeBadge(
-    type: CrashType,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    val text = when (type) {
-        CrashType.DATA_APP_CRASH, CrashType.SYSTEM_APP_CRASH -> "CRASH"
-        CrashType.DATA_APP_ANR, CrashType.SYSTEM_APP_ANR -> "ANR"
-        CrashType.SYSTEM_TOMBSTONE -> "NATIVE"
-        else -> type.displayName.uppercase()
-    }
-
-    Surface(
-        modifier = modifier,
-        color = color.copy(alpha = 0.1f),
-        shape = MaterialTheme.shapes.extraSmall
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = color
-        )
-    }
-}
-
-@Composable
 fun ErrorMessage(message: String) {
     Box(
         modifier = Modifier
@@ -669,5 +649,149 @@ fun EmptyState() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun Search(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+) {
+    var isHintDisplayed by remember {
+        mutableStateOf(true)
+    }
+    val focusManager = LocalFocusManager.current
+
+    Box(modifier = Modifier.background(Color.Transparent)) {
+        BasicTextField(
+            value = searchQuery,
+            onValueChange = {
+                onSearchQueryChange(it)
+            },
+            maxLines = 1,
+            singleLine = true,
+            textStyle = TextStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 16.sp
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    // Hide keyboard on done
+                    focusManager.clearFocus()
+                }
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .onFocusChanged {
+                    isHintDisplayed = it.isFocused.not() && searchQuery.isBlank()
+                },
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            shape = RoundedCornerShape(size = 50.dp)
+                        )
+                        .padding(all = 16.dp), // inner padding
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(4f)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                shape = RoundedCornerShape(size = 16.dp)
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Favorite icon",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(width = 8.dp))
+                        if (isHintDisplayed) {
+                            Text(
+                                text = "Search crashes...",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(0.4f)
+                            .clickable(
+                                onClick = { onSearchQueryChange("") },
+                                role = Role.Button
+                            ),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear icon",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun CrashLogListContentPreview() {
+    StackLensTheme {
+        CrashLogListContent(
+            uiState = sampleUiState,
+            onRefresh = {},
+            onSearchQueryChange = {},
+            onCrashClick = {},
+            onTimeRangeChange = {},
+            onSortOrderChange = {},
+            onTypeFilterChange = {}
+        )
+    }
+}
+
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun CrashLogListContentDarkPreview() {
+    StackLensTheme {
+        CrashLogListContent(
+            uiState = sampleUiState,
+            onRefresh = {},
+            onSearchQueryChange = {},
+            onCrashClick = {},
+            onTimeRangeChange = {},
+            onSortOrderChange = {},
+            onTypeFilterChange = {}
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun EmptyStatePreview() {
+    StackLensTheme {
+        CrashLogListContent(
+            uiState = sampleUiState.copy(
+                crashLogs = emptyList()
+            ),
+            onRefresh = {},
+            onSearchQueryChange = {},
+            onCrashClick = {},
+            onTimeRangeChange = {},
+            onSortOrderChange = {},
+            onTypeFilterChange = {}
+        )
     }
 }

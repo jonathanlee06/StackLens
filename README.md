@@ -10,11 +10,11 @@
 
 *A powerful Android crash log viewer that reads system crash logs directly from your device. Built with Jetpack Compose and Material 3.*
 
-[![Join Beta](https://img.shields.io/badge/Get%20it%20on-Google%20Play-blue?logo=google-play)](mailto:teleport.beta@devbyjonathan.com?subject=Request%20to%20Join%20Teleport%20Closed%20Beta&body=Hi%2C%0A%0AI%20would%20like%20to%20join%20the%20Teleport%20closed%20beta%20testing%20program.%0A%0AMy%20Google%20Account%20Email%3A%20%0A%0ADevice%3A%20%0A%0AAndroid%20Version%3A%20%0A%0AThanks!)
-
 [Features](#-features) • [Tech Stack](#-tech-stack) • [Usage](#-usage) • [Contributing](#-contributing)
 
 </div>
+
+![Introduction](screenshots/readme.png)
 
 ---
 
