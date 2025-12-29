@@ -120,11 +120,13 @@ fun CrashDetailScreen(
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
+                            modifier = Modifier.basicMarquee(),
                             text = "Copy log",
                             style = AppTypography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium
                             ),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1
                         )
                     }
                 }
@@ -153,11 +155,13 @@ fun CrashDetailScreen(
                             tint = MaterialTheme.colorScheme.primaryContainer
                         )
                         Text(
+                            modifier = Modifier.basicMarquee(),
                             text = "Share Trace",
                             style = AppTypography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium
                             ),
-                            color = MaterialTheme.colorScheme.primaryContainer
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            maxLines = 1
                         )
                     }
                 }

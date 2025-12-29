@@ -2,7 +2,6 @@ package com.devbyjonathan.stacklens.screen.settings
 
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -24,7 +23,7 @@ fun TermsScreen(
 ) {
     LegalWebViewScreen(
         title = "Terms & Conditions",
-        url = "https://example.com/terms", // Replace with your actual URL
+        url = "https://stacklens.devbyjonathan.com/terms/", // Replace with your actual URL
         onBackClick = onBackClick
     )
 }
@@ -36,7 +35,7 @@ fun PrivacyScreen(
 ) {
     LegalWebViewScreen(
         title = "Privacy Policy",
-        url = "https://example.com/privacy", // Replace with your actual URL
+        url = "https://stacklens.devbyjonathan.com/privacy/", // Replace with your actual URL
         onBackClick = onBackClick
     )
 }
