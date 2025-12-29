@@ -25,12 +25,12 @@ android {
         applicationId = "com.devbyjonathan.stacklens"
         minSdk = 21
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.0.1-alpha"
+        versionCode = 2
+        versionName = "0.0.2-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "APP_VERSION", "\"0.0.1-alpha\"")
+        buildConfigField("String", "APP_VERSION", "\"0.0.2-alpha\"")
     }
 
     signingConfigs {
