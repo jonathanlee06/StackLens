@@ -1,5 +1,7 @@
 package com.devbyjonathan.stacklens.repository
 
+import com.devbyjonathan.stacklens.data.local.dao.CrashLogDao
+import com.devbyjonathan.stacklens.data.local.entity.CrashLogEntity
 import com.devbyjonathan.stacklens.model.CrashFilter
 import com.devbyjonathan.stacklens.model.CrashGroup
 import com.devbyjonathan.stacklens.model.CrashLog
@@ -14,16 +16,49 @@ import javax.inject.Singleton
 @Singleton
 class CrashLogRepository @Inject constructor(
     private val crashLogReader: CrashLogReader,
+    private val crashLogDao: CrashLogDao,
     private val signatureGenerator: CrashSignatureGenerator,
 ) {
+    companion object {
+        private const val RETENTION_DAYS = 7
+        private const val RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000L
+    }
 
     suspend fun getCrashLogs(filter: CrashFilter): List<CrashLog> {
-        val logs = crashLogReader.readCrashLogs(
-            types = filter.types.toList(),
-            sinceHours = filter.timeRangeHours
-        )
+        // Clean up old entries first
+        cleanupOldEntries()
 
-        return logs.filter { log ->
+        // Read fresh crashes from DropBox
+        val freshLogs = try {
+            crashLogReader.readCrashLogs(
+                types = filter.types.toList(),
+                sinceHours = filter.timeRangeHours
+            )
+        } catch (e: SecurityException) {
+            // Permission not granted - return only persisted data
+            emptyList()
+        }
+
+        // Persist new crashes to database
+        if (freshLogs.isNotEmpty()) {
+            val entities = freshLogs.map { CrashLogEntity.fromCrashLog(it) }
+            crashLogDao.insertAll(entities)
+        }
+
+        // Calculate time range for query
+        val sinceTimestamp = System.currentTimeMillis() - (filter.timeRangeHours * 60 * 60 * 1000L)
+        val tags = filter.types.map { it.tag }
+
+        // Get persisted crashes within time range
+        val persistedLogs = crashLogDao.getCrashesByTagsSince(tags, sinceTimestamp)
+            .map { it.toCrashLog() }
+
+        // Merge and deduplicate (ID is timestamp-based, so duplicates have same ID)
+        val allLogs = (freshLogs + persistedLogs)
+            .distinctBy { it.id }
+            .sortedByDescending { it.timestamp }
+
+        return allLogs.filter { log ->
             // Filter by package name if specified
             val matchesPackage = filter.packageName?.let {
                 log.packageName?.contains(it, ignoreCase = true) == true
@@ -48,11 +83,32 @@ class CrashLogRepository @Inject constructor(
      * Get unique packages that have crashed
      */
     suspend fun getCrashedPackages(): List<String> {
-        val logs = crashLogReader.readCrashLogs(
-            types = CrashType.appCrashTags + CrashType.anrTags,
-            sinceHours = 168 // Last week
-        )
-        return logs.mapNotNull { it.packageName }.distinct().sorted()
+        cleanupOldEntries()
+
+        val freshLogs = try {
+            crashLogReader.readCrashLogs(
+                types = CrashType.appCrashTags + CrashType.anrTags,
+                sinceHours = 168 // Last week
+            )
+        } catch (e: SecurityException) {
+            emptyList()
+        }
+
+        // Persist to database
+        if (freshLogs.isNotEmpty()) {
+            val entities = freshLogs.map { CrashLogEntity.fromCrashLog(it) }
+            crashLogDao.insertAll(entities)
+        }
+
+        // Get from database
+        val sinceTimestamp = System.currentTimeMillis() - (RETENTION_DAYS * 24 * 60 * 60 * 1000L)
+        val tags = (CrashType.appCrashTags + CrashType.anrTags).map { it.tag }
+        val persistedLogs = crashLogDao.getCrashesByTagsSince(tags, sinceTimestamp)
+            .map { it.toCrashLog() }
+
+        val allLogs = (freshLogs + persistedLogs).distinctBy { it.id }
+
+        return allLogs.mapNotNull { it.packageName }.distinct().sorted()
     }
 
     /**
@@ -90,5 +146,13 @@ class CrashLogRepository @Inject constructor(
                 )
             }
             .sortedByDescending { it.lastOccurrence }
+    }
+
+    /**
+     * Delete crash logs older than retention period (7 days)
+     */
+    private suspend fun cleanupOldEntries() {
+        val cutoffTimestamp = System.currentTimeMillis() - RETENTION_MS
+        crashLogDao.deleteOlderThan(cutoffTimestamp)
     }
 }

@@ -22,6 +22,7 @@ navigation = "2.8.9"
 splashScreen = "1.0.1"
 work = "2.10.0"
 hiltWork = "1.2.0"
+room = "2.6.1"
 
 [libraries]
 
@@ -58,6 +59,11 @@ navigation-compose = { module = "androidx.navigation:navigation-compose", versio
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltWork" }
 hilt-work-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltWork" }
+
+# Room
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
