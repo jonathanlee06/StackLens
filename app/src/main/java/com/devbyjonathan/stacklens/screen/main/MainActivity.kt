@@ -20,6 +20,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.devbyjonathan.stacklens.ai.CrashInsightService
 import com.devbyjonathan.stacklens.navigation.Screen
 import com.devbyjonathan.stacklens.screen.detail.CrashDetailScreen
 import com.devbyjonathan.stacklens.screen.list.CrashLogViewModel
@@ -38,6 +39,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var themeManager: ThemeManager
+
+    @Inject
+    lateinit var crashInsightService: CrashInsightService
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,6 +152,7 @@ class MainActivity : ComponentActivity() {
                             onTimeRangeChange = { vm.setTimeRange(it) },
                             onSortOrderChange = { vm.setSortOrder(it) },
                             onTypeFilterChange = { vm.setTypeFilter(it) },
+                            onGroupExpand = { vm.toggleGroupExpansion(it) },
                             onThemeChange = { themeManager.setThemeMode(it) },
                             onDynamicColorChange = { themeManager.setDynamicColorEnabled(it) },
                             onTermsClick = { navController.navigate(Screen.Terms.route) },
@@ -159,7 +164,8 @@ class MainActivity : ComponentActivity() {
                         selectedCrash?.let { crash ->
                             CrashDetailScreen(
                                 crash = crash,
-                                onBackClick = { navController.popBackStack() }
+                                onBackClick = { navController.popBackStack() },
+                                crashInsightService = crashInsightService
                             )
                         }
                     }

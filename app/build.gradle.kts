@@ -112,6 +112,19 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
 
+    // WorkManager + Hilt Worker
+    implementation(libs.work.runtime)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
+
+    // Room
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // ML Kit GenAI (Gemini Nano on-device)
+    implementation(libs.mlkit.genai.prompt)
+
     // Navigation
     implementation(libs.navigation.compose)
 
