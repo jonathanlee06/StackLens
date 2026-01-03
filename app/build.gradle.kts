@@ -21,18 +21,18 @@ plugins {
 
 android {
     namespace = "com.devbyjonathan.stacklens"
-    compileSdk = 36
+    compileSdk = ProjectConfig.compileSdk
 
     defaultConfig {
         applicationId = "com.devbyjonathan.stacklens"
-        minSdk = 21
-        targetSdk = 36
-        versionCode = 2
-        versionName = "0.0.2-alpha"
+        minSdk = ProjectConfig.minSdk
+        targetSdk = ProjectConfig.targetSdk
+        versionCode = ProjectConfig.versionCode
+        versionName = ProjectConfig.versionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "APP_VERSION", "\"0.0.2-alpha\"")
+        buildConfigField("String", "APP_VERSION", ProjectConfig.versionName)
     }
 
     signingConfigs {
