@@ -32,7 +32,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "APP_VERSION", ProjectConfig.versionName)
+        buildConfigField("String", "APP_VERSION", "\"${ProjectConfig.versionName}\"")
     }
 
     signingConfigs {
