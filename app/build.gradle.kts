@@ -21,18 +21,18 @@ plugins {
 
 android {
     namespace = "com.devbyjonathan.stacklens"
-    compileSdk = 36
+    compileSdk = ProjectConfig.compileSdk
 
     defaultConfig {
         applicationId = "com.devbyjonathan.stacklens"
-        minSdk = 21
-        targetSdk = 36
-        versionCode = 2
-        versionName = "0.0.2-alpha"
+        minSdk = ProjectConfig.minSdk
+        targetSdk = ProjectConfig.targetSdk
+        versionCode = ProjectConfig.versionCode
+        versionName = ProjectConfig.versionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "APP_VERSION", "\"0.0.2-alpha\"")
+        buildConfigField("String", "APP_VERSION", ProjectConfig.versionName)
     }
 
     signingConfigs {
@@ -111,6 +111,19 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+
+    // WorkManager + Hilt Worker
+    implementation(libs.work.runtime)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
+
+    // Room
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // ML Kit GenAI (Gemini Nano on-device)
+    implementation(libs.mlkit.genai.prompt)
 
     // Navigation
     implementation(libs.navigation.compose)

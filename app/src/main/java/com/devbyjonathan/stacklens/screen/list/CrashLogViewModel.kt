@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devbyjonathan.stacklens.model.CrashFilter
+import com.devbyjonathan.stacklens.model.CrashGroup
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.model.CrashTypeFilter
@@ -74,9 +75,21 @@ class CrashLogViewModel @Inject constructor(
                     SortOrder.OLDEST_FIRST -> logs.sortedBy { it.timestamp }
                 }
 
+                // Load grouped crashes (always enabled)
+                val groups = repository.getGroupedCrashLogs(filter).let { allGroups ->
+                    // Apply type filter to groups
+                    when (filter.typeFilter) {
+                        CrashTypeFilter.ALL -> allGroups
+                        CrashTypeFilter.CRASHES -> allGroups.filter { it.crashType in CrashType.appCrashTags }
+                        CrashTypeFilter.ANRS -> allGroups.filter { it.crashType in CrashType.anrTags }
+                        CrashTypeFilter.NATIVE -> allGroups.filter { it.crashType in CrashType.nativeTags }
+                    }
+                }
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     crashLogs = logs,
+                    crashGroups = groups,
                     stats = stats
                 )
             } catch (e: SecurityException) {
@@ -139,6 +152,16 @@ class CrashLogViewModel @Inject constructor(
     fun refresh() {
         loadCrashLogs()
     }
+
+    fun toggleGroupExpansion(signature: String) {
+        val currentExpanded = _uiState.value.expandedGroups
+        val newExpanded = if (signature in currentExpanded) {
+            currentExpanded - signature
+        } else {
+            currentExpanded + signature
+        }
+        _uiState.value = _uiState.value.copy(expandedGroups = newExpanded)
+    }
 }
 
 data class CrashLogUiState(
@@ -148,7 +171,9 @@ data class CrashLogUiState(
     val hasUsageStatsPermission: Boolean = false,
     val hasDropBoxDataPermission: Boolean = false,
     val crashLogs: List<CrashLog> = emptyList(),
+    val crashGroups: List<CrashGroup> = emptyList(),
+    val expandedGroups: Set<String> = emptySet(),
     val stats: Map<CrashType, Int> = emptyMap(),
     val filter: CrashFilter = CrashFilter(),
-    val error: String? = null
+    val error: String? = null,
 )

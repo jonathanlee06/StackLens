@@ -7,13 +7,11 @@ plugins {
 
 android {
     namespace = "com.devbyjonathan.uikit"
-//    compileSdk = ProjectConfig.compileSdk
-    compileSdk = 36
+    compileSdk = ProjectConfig.compileSdk
 
 
     defaultConfig {
-//        minSdk = ProjectConfig.minSdk
-        minSdk = 21
+        minSdk = ProjectConfig.minSdk
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
