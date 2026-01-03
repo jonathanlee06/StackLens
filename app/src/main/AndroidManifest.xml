@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Allow ML Kit GenAI on older minSdk (feature requires Android 14+ at runtime) -->
+    <uses-sdk tools:overrideLibrary="
+        com.google.mlkit.genai.prompt,
+        com.google.mlkit.genai.common,
+        com.google.android.gms.common" />
+
     <!-- Required permissions for crash log reading -->
     <uses-permission android:name="android.permission.READ_LOGS" />
     <uses-permission
@@ -17,6 +23,9 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- For AI model download progress notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".StackLensApp"

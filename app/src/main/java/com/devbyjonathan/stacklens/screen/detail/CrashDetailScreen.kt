@@ -1,6 +1,9 @@
 package com.devbyjonathan.stacklens.screen.detail
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.horizontalScroll
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -22,22 +26,29 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.WrapText
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,11 +60,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devbyjonathan.stacklens.ai.CrashInsightService
+import com.devbyjonathan.stacklens.ai.DownloadState
+import com.devbyjonathan.stacklens.ai.InsightResult
 import com.devbyjonathan.stacklens.common.CrashTypeBadge
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.theme.StackLensTheme
 import com.devbyjonathan.uikit.theme.AppTypography
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,12 +77,47 @@ import java.util.Locale
 @Composable
 fun CrashDetailScreen(
     crash: CrashLog,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    crashInsightService: CrashInsightService? = null,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     var wrapText by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    var aiAvailable by remember { mutableStateOf<Boolean?>(null) }
+    var insightResult by remember { mutableStateOf<InsightResult?>(null) }
+    var showInsight by remember { mutableStateOf(false) }
+    val downloadState by crashInsightService?.downloadState?.collectAsState()
+        ?: remember { mutableStateOf(DownloadState.Idle) }
+
+    LaunchedEffect(crashInsightService) {
+        crashInsightService?.let {
+            // Check if AI is available or downloadable (show button for both)
+            val available = it.isAvailable()
+            val status = it.getStatus()
+            aiAvailable =
+                available || status == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE
+                        || status == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING
+
+            // Check for cached insight and auto-expand if available
+            val cachedInsight = it.getCachedInsight(crash.id)
+            if (cachedInsight != null) {
+                insightResult = InsightResult.Success(cachedInsight)
+                showInsight = true
+            }
+        }
+    }
+
+    // Auto-retry when download completes
+    LaunchedEffect(downloadState) {
+        if (downloadState is DownloadState.Completed && insightResult is InsightResult.Downloading) {
+            // Download completed, retry the analysis
+            insightResult = InsightResult.Loading
+            insightResult = crashInsightService?.analyzeCrash(crash) ?: InsightResult.Unavailable
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -88,6 +138,32 @@ fun CrashDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    if (aiAvailable == true) {
+                        IconButton(
+                            onClick = {
+                                showInsight = !showInsight
+                                if (showInsight && insightResult == null) {
+                                    insightResult = InsightResult.Loading
+                                    scope.launch {
+                                        insightResult = crashInsightService?.analyzeCrash(crash)
+                                            ?: InsightResult.Unavailable
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = "AI Insight",
+                                tint = if (showInsight) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    }
+                }
             )
         },
         bottomBar = {
@@ -175,6 +251,25 @@ fun CrashDetailScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
+            // AI Insight Card (collapsible)
+            AnimatedVisibility(
+                visible = showInsight,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                AiInsightCard(
+                    result = insightResult,
+                    downloadState = downloadState,
+                    onRetry = {
+                        insightResult = InsightResult.Loading
+                        scope.launch {
+                            insightResult = crashInsightService?.analyzeCrash(crash)
+                                ?: InsightResult.Unavailable
+                        }
+                    }
+                )
+            }
+
             // Metadata card
             Card(
                 modifier = Modifier
@@ -208,7 +303,7 @@ fun CrashDetailScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -255,6 +350,222 @@ fun CrashDetailScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun AiInsightCard(
+    result: InsightResult?,
+    downloadState: DownloadState,
+    onRetry: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "AI Insight",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "(Gemini Nano)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            when (result) {
+                is InsightResult.Loading -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Analyzing crash...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    }
+                }
+
+                is InsightResult.Downloading -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Show download progress based on state
+                        val progressText = when (downloadState) {
+                            is DownloadState.Idle -> "Preparing download..."
+                            is DownloadState.Starting -> "Starting download..."
+                            is DownloadState.InProgress -> {
+                                val mb = downloadState.bytesDownloaded / (1024.0 * 1024.0)
+                                "Downloading: ${String.format(java.util.Locale.US, "%.1f", mb)} MB"
+                            }
+
+                            is DownloadState.Completed -> "Download complete!"
+                            is DownloadState.Failed -> "Download failed: ${downloadState.error}"
+                        }
+
+                        Text(
+                            text = progressText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (downloadState is DownloadState.Failed) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Show progress bar based on state
+                        when (downloadState) {
+                            is DownloadState.Failed -> {
+                                // No progress bar for failed state
+                            }
+
+                            is DownloadState.Completed -> {
+                                LinearProgressIndicator(
+                                    progress = { 1f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            }
+
+                            else -> {
+                                // Indeterminate progress for downloading states
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "This is a one-time download. You can leave the app - download will continue in background.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = onRetry,
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text(if (downloadState is DownloadState.Failed) "Retry" else "Check again")
+                        }
+                    }
+                }
+
+                is InsightResult.Success -> {
+                    val insight = result.insight
+
+                    InsightSection("Summary", insight.summary)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    InsightSection("Root Cause", insight.rootCause)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    InsightSection("Suggested Fix", insight.suggestedFix)
+
+                    insight.affectedLine?.let { line ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        InsightSection("Affected Line", line, isCode = true)
+                    }
+                }
+
+                is InsightResult.Error -> {
+                    Column {
+                        Text(
+                            text = result.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(onClick = onRetry) {
+                            Text("Retry")
+                        }
+                    }
+                }
+
+                is InsightResult.Unavailable -> {
+                    Text(
+                        text = "On-device AI is not available on this device. Requires Android 14+ with Gemini Nano support (Pixel 8+, Samsung S24+).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                null -> {
+                    Text(
+                        text = "Tap to analyze this crash with on-device AI.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsightSection(
+    title: String,
+    content: String,
+    isCode: Boolean = false,
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = content,
+            style = if (isCode) {
+                MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace
+                )
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

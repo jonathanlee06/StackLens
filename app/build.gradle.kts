@@ -122,6 +122,9 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // ML Kit GenAI (Gemini Nano on-device)
+    implementation(libs.mlkit.genai.prompt)
+
     // Navigation
     implementation(libs.navigation.compose)
 
