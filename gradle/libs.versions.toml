@@ -20,6 +20,8 @@ lifecycleRuntimeKtx = "2.8.7"
 material = "1.12.0"
 navigation = "2.8.9"
 splashScreen = "1.0.1"
+work = "2.10.0"
+hiltWork = "1.2.0"
 
 [libraries]
 
@@ -51,6 +53,11 @@ hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", ve
 
 # Navigation
 navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+
+# WorkManager
+work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltWork" }
+hilt-work-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltWork" }
 
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

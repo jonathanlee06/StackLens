@@ -148,6 +148,7 @@ class MainActivity : ComponentActivity() {
                             onTimeRangeChange = { vm.setTimeRange(it) },
                             onSortOrderChange = { vm.setSortOrder(it) },
                             onTypeFilterChange = { vm.setTypeFilter(it) },
+                            onGroupExpand = { vm.toggleGroupExpansion(it) },
                             onThemeChange = { themeManager.setThemeMode(it) },
                             onDynamicColorChange = { themeManager.setDynamicColorEnabled(it) },
                             onTermsClick = { navController.navigate(Screen.Terms.route) },

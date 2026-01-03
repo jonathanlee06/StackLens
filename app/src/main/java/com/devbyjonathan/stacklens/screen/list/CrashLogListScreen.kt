@@ -87,7 +87,8 @@ fun CrashLogListContent(
     onCrashClick: (CrashLog) -> Unit,
     onTimeRangeChange: (Int) -> Unit,
     onSortOrderChange: (SortOrder) -> Unit,
-    onTypeFilterChange: (CrashTypeFilter) -> Unit
+    onTypeFilterChange: (CrashTypeFilter) -> Unit,
+    onGroupExpand: (String) -> Unit = {},
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showDurationSheet by remember { mutableStateOf(false) }
@@ -121,7 +122,8 @@ fun CrashLogListContent(
             },
             showSortSheet = {
                 showSortSheet = true
-            }
+            },
+            onGroupExpand = onGroupExpand
         )
     }
 
@@ -448,6 +450,7 @@ fun CrashLogList(
     onTypeFilterChange: (CrashTypeFilter) -> Unit,
     showDurationSheet: () -> Unit,
     showSortSheet: () -> Unit,
+    onGroupExpand: (String) -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -490,14 +493,21 @@ fun CrashLogList(
                     ErrorMessage(message = uiState.error)
                 }
             }
-            uiState.crashLogs.isEmpty() -> {
+            uiState.crashGroups.isEmpty() -> {
                 item {
                     EmptyState()
                 }
             }
+
             else -> {
-                items(uiState.crashLogs, key = { "${it.id}_${it.tag}" }) { crash ->
-                    CrashLogItem(crash = crash, onClick = { onCrashClick(crash) })
+                // Grouped view (always enabled)
+                items(uiState.crashGroups, key = { it.signature }) { group ->
+                    CrashGroupItem(
+                        group = group,
+                        isExpanded = group.signature in uiState.expandedGroups,
+                        onGroupClick = { onGroupExpand(group.signature) },
+                        onCrashClick = onCrashClick
+                    )
                 }
             }
         }

@@ -71,10 +71,11 @@ fun HomeScreen(
     onTimeRangeChange: (Int) -> Unit,
     onSortOrderChange: (SortOrder) -> Unit,
     onTypeFilterChange: (CrashTypeFilter) -> Unit,
+    onGroupExpand: (String) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onTermsClick: () -> Unit,
-    onPrivacyClick: () -> Unit
+    onPrivacyClick: () -> Unit,
 ) {
     val navItems = listOf(
         BottomNavItem(
@@ -179,7 +180,8 @@ fun HomeScreen(
                     onCrashClick = onCrashClick,
                     onTimeRangeChange = onTimeRangeChange,
                     onSortOrderChange = onSortOrderChange,
-                    onTypeFilterChange = onTypeFilterChange
+                    onTypeFilterChange = onTypeFilterChange,
+                    onGroupExpand = onGroupExpand
                 )
                 1 -> SettingsScreen(
                     modifier = Modifier.padding(padding),
@@ -209,6 +211,7 @@ fun HomeScreenPreview() {
             onTimeRangeChange = {},
             onSortOrderChange = {},
             onTypeFilterChange = {},
+            onGroupExpand = {},
             onThemeChange = {},
             onDynamicColorChange = {},
             onTermsClick = {},
@@ -231,6 +234,7 @@ fun HomeScreenDarkPreview() {
             onTimeRangeChange = {},
             onSortOrderChange = {},
             onTypeFilterChange = {},
+            onGroupExpand = {},
             onThemeChange = {},
             onDynamicColorChange = {},
             onTermsClick = {},
