@@ -67,6 +67,8 @@ import com.devbyjonathan.stacklens.common.CrashTypeBadge
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.theme.StackLensTheme
+import com.devbyjonathan.stacklens.util.StackTraceColors
+import com.devbyjonathan.stacklens.util.highlightStackTrace
 import com.devbyjonathan.uikit.theme.AppTypography
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -326,6 +328,25 @@ fun CrashDetailScreen(
                         }
                     }
 
+                    // Syntax highlighting colors for stack trace
+                    val stackTraceColors = StackTraceColors(
+                        exception = MaterialTheme.colorScheme.error,
+                        causedBy = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                        atKeyword = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        className = MaterialTheme.colorScheme.onSurfaceVariant,
+                        methodName = MaterialTheme.colorScheme.primary,
+                        lineNumber = MaterialTheme.colorScheme.tertiary,
+                        fileName = MaterialTheme.colorScheme.secondary,
+                        nativeMethod = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        message = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
+                        default = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val highlightedContent = highlightStackTrace(
+                        content = crash.content,
+                        colors = stackTraceColors
+                    )
+
                     Box(
                         modifier = if (wrapText) {
                             Modifier.fillMaxWidth()
@@ -337,11 +358,10 @@ fun CrashDetailScreen(
                     ) {
                         SelectionContainer {
                             Text(
-                                text = crash.content,
+                                text = highlightedContent,
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                         }
                     }

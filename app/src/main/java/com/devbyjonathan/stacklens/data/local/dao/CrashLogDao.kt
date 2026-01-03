@@ -9,7 +9,7 @@ import com.devbyjonathan.stacklens.data.local.entity.CrashLogEntity
 @Dao
 interface CrashLogDao {
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(crashes: List<CrashLogEntity>)
 
     @Query("SELECT * FROM crash_logs ORDER BY timestamp DESC")

@@ -47,6 +47,13 @@ object DatabaseModule {
             StackLensDatabase.DATABASE_NAME
         )
             .addMigrations(MIGRATION_1_2)
+            // Enable foreign key constraints
+            .addCallback(object : androidx.room.RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    db.execSQL("PRAGMA foreign_keys = ON")
+                }
+            })
             .build()
     }
 
