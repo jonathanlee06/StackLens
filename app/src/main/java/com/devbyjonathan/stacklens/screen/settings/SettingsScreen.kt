@@ -1,7 +1,6 @@
 package com.devbyjonathan.stacklens.screen.settings
 
 import android.content.res.Configuration
-import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,12 +26,10 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +53,7 @@ import com.devbyjonathan.stacklens.BuildConfig
 import com.devbyjonathan.stacklens.R
 import com.devbyjonathan.stacklens.theme.StackLensTheme
 import com.devbyjonathan.stacklens.theme.ThemeMode
+import com.devbyjonathan.stacklens.util.isAtLeastAndroid12
 import com.devbyjonathan.uikit.theme.AppTypography
 
 @Composable
@@ -71,7 +69,7 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAppInfoDialog by remember { mutableStateOf(false) }
 
-    val isDynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val isDynamicColorSupported = isAtLeastAndroid12()
 
     Column(
         modifier = modifier

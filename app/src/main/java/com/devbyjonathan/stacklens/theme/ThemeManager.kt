@@ -1,7 +1,6 @@
 package com.devbyjonathan.stacklens.theme
 
 import android.content.SharedPreferences
-import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,9 +26,6 @@ class ThemeManager @Inject constructor(
 
     private val _dynamicColorEnabled = MutableStateFlow(getDynamicColorEnabled())
     val dynamicColorEnabled: StateFlow<Boolean> = _dynamicColorEnabled
-
-    val isDynamicColorSupported: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     fun getThemeMode(): ThemeMode {
         val savedValue = sharedPreferences.getString(THEME_MODE_KEY, null)
