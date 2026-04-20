@@ -156,7 +156,10 @@ class MainActivity : ComponentActivity() {
                             onThemeChange = { themeManager.setThemeMode(it) },
                             onDynamicColorChange = { themeManager.setDynamicColorEnabled(it) },
                             onTermsClick = { navController.navigate(Screen.Terms.route) },
-                            onPrivacyClick = { navController.navigate(Screen.Privacy.route) }
+                            onPrivacyClick = { navController.navigate(Screen.Privacy.route) },
+                            onToggleAiSearch = { vm.toggleAiSearchMode() },
+                            onDismissAiTooltip = { vm.dismissAiTooltip() },
+                            onSuggestedPromptClick = { vm.applySuggestedPrompt(it) }
                         )
                     }
 

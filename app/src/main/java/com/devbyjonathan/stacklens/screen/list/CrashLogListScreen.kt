@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
@@ -40,12 +42,20 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +69,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -89,6 +98,9 @@ fun CrashLogListContent(
     onSortOrderChange: (SortOrder) -> Unit,
     onTypeFilterChange: (CrashTypeFilter) -> Unit,
     onGroupExpand: (String) -> Unit = {},
+    onToggleAiSearch: () -> Unit = {},
+    onDismissAiTooltip: () -> Unit = {},
+    onSuggestedPromptClick: (String) -> Unit = {},
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showDurationSheet by remember { mutableStateOf(false) }
@@ -123,7 +135,10 @@ fun CrashLogListContent(
             showSortSheet = {
                 showSortSheet = true
             },
-            onGroupExpand = onGroupExpand
+            onGroupExpand = onGroupExpand,
+            onToggleAiSearch = onToggleAiSearch,
+            onDismissAiTooltip = onDismissAiTooltip,
+            onSuggestedPromptClick = onSuggestedPromptClick
         )
     }
 
@@ -440,7 +455,7 @@ fun CrashTypeFilterChip(
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CrashLogList(
     uiState: CrashLogUiState,
@@ -451,6 +466,9 @@ fun CrashLogList(
     showDurationSheet: () -> Unit,
     showSortSheet: () -> Unit,
     onGroupExpand: (String) -> Unit = {},
+    onToggleAiSearch: () -> Unit = {},
+    onDismissAiTooltip: () -> Unit = {},
+    onSuggestedPromptClick: (String) -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -459,7 +477,15 @@ fun CrashLogList(
         item {
             Search(
                 searchQuery = searchQuery,
-                onSearchQueryChange = onSearchQueryChange
+                onSearchQueryChange = onSearchQueryChange,
+                isAiSearchEnabled = uiState.isAiSearchEnabled,
+                isAiSearchAvailable = uiState.isAiSearchAvailable,
+                isParsingQuery = uiState.isParsingQuery,
+                showAiTooltip = uiState.showAiTooltip,
+                suggestedPrompts = uiState.suggestedPrompts,
+                onToggleAiSearch = onToggleAiSearch,
+                onDismissTooltip = onDismissAiTooltip,
+                onSuggestedPromptClick = onSuggestedPromptClick
             )
         }
 
@@ -662,97 +688,208 @@ fun EmptyState() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Search(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    isAiSearchEnabled: Boolean,
+    isAiSearchAvailable: Boolean,
+    isParsingQuery: Boolean,
+    showAiTooltip: Boolean,
+    suggestedPrompts: List<String>,
+    onToggleAiSearch: () -> Unit,
+    onDismissTooltip: () -> Unit,
+    onSuggestedPromptClick: (String) -> Unit,
 ) {
     var isHintDisplayed by remember {
         mutableStateOf(true)
     }
     val focusManager = LocalFocusManager.current
+    val tooltipState = rememberTooltipState()
+    val scope = rememberCoroutineScope()
 
-    Box(modifier = Modifier.background(Color.Transparent)) {
-        BasicTextField(
-            value = searchQuery,
-            onValueChange = {
-                onSearchQueryChange(it)
-            },
-            maxLines = 1,
-            singleLine = true,
-            textStyle = TextStyle(
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    // Hide keyboard on done
-                    focusManager.clearFocus()
-                }
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .onFocusChanged {
-                    isHintDisplayed = it.isFocused.not() && searchQuery.isBlank()
+    // Show tooltip when needed
+    if (showAiTooltip && isAiSearchAvailable) {
+        scope.launch {
+            tooltipState.show()
+            onDismissTooltip()
+        }
+    }
+
+    Column {
+        Box(modifier = Modifier.background(Color.Transparent)) {
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = {
+                    onSearchQueryChange(it)
                 },
-            decorationBox = { innerTextField ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shape = RoundedCornerShape(size = 50.dp)
-                        )
-                        .padding(all = 16.dp), // inner padding
-                ) {
+                maxLines = 1,
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 16.sp
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        // Hide keyboard on done
+                        focusManager.clearFocus()
+                    }
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .onFocusChanged {
+                        isHintDisplayed = it.isFocused.not() && searchQuery.isBlank()
+                    },
+                decorationBox = { innerTextField ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(4f)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceContainer,
-                                shape = RoundedCornerShape(size = 16.dp)
-                            ),
+                                shape = RoundedCornerShape(size = 50.dp)
+                            )
+                            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Search icon
                         Icon(
                             imageVector = Icons.Default.Search,
-                            contentDescription = "Favorite icon",
+                            contentDescription = "Search icon",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(width = 8.dp))
-                        if (isHintDisplayed) {
-                            Text(
-                                text = "Search crashes...",
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+
+                        // Search text field
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (isHintDisplayed) {
+                                Text(
+                                    text = if (isAiSearchEnabled) "Try \"NullPointer crashes from Gmail\"" else "Search crashes...",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
-                    }
-                    Column(
-                        modifier = Modifier
-                            .weight(0.4f)
-                            .clickable(
-                                onClick = { onSearchQueryChange("") },
-                                role = Role.Button
-                            ),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear icon",
-                                tint = MaterialTheme.colorScheme.onSurface,
+
+                        // Loading indicator when parsing query
+                        if (isParsingQuery) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
+                        // Clear button
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { onSearchQueryChange("") },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // AI toggle button (only show if available)
+                        if (isAiSearchAvailable) {
+                            TooltipBox(
+                                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                                tooltip = {
+                                    PlainTooltip {
+                                        Text("AI-powered search")
+                                    }
+                                },
+                                state = tooltipState
+                            ) {
+                                IconButton(
+                                    onClick = onToggleAiSearch,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(
+                                            color = if (isAiSearchEnabled)
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            else
+                                                Color.Transparent,
+                                            shape = CircleShape
+                                        ),
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        contentColor = if (isAiSearchEnabled)
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = if (isAiSearchEnabled) "Disable AI search" else "Enable AI search",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-            }
-        )
+            )
+        }
+
+        // Suggested prompts row (only show when AI mode enabled, prompts exist, and query is blank)
+        if (isAiSearchEnabled && suggestedPrompts.isNotEmpty() && searchQuery.isBlank()) {
+            SuggestedPromptsRow(
+                prompts = suggestedPrompts,
+                onPromptClick = onSuggestedPromptClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestedPromptsRow(
+    prompts: List<String>,
+    onPromptClick: (String) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        items(prompts) { prompt ->
+            SuggestionChip(
+                onClick = { onPromptClick(prompt) },
+                label = {
+                    Text(
+                        text = prompt,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    labelColor = MaterialTheme.colorScheme.onSurface,
+                    iconContentColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
     }
 }
 
@@ -767,7 +904,10 @@ private fun CrashLogListContentPreview() {
             onCrashClick = {},
             onTimeRangeChange = {},
             onSortOrderChange = {},
-            onTypeFilterChange = {}
+            onTypeFilterChange = {},
+            onToggleAiSearch = {},
+            onDismissAiTooltip = {},
+            onSuggestedPromptClick = {}
         )
     }
 }
@@ -783,7 +923,10 @@ private fun CrashLogListContentDarkPreview() {
             onCrashClick = {},
             onTimeRangeChange = {},
             onSortOrderChange = {},
-            onTypeFilterChange = {}
+            onTypeFilterChange = {},
+            onToggleAiSearch = {},
+            onDismissAiTooltip = {},
+            onSuggestedPromptClick = {}
         )
     }
 }
@@ -801,7 +944,10 @@ private fun EmptyStatePreview() {
             onCrashClick = {},
             onTimeRangeChange = {},
             onSortOrderChange = {},
-            onTypeFilterChange = {}
+            onTypeFilterChange = {},
+            onToggleAiSearch = {},
+            onDismissAiTooltip = {},
+            onSuggestedPromptClick = {}
         )
     }
 }
