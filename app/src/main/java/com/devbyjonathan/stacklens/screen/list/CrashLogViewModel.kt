@@ -36,6 +36,9 @@ class CrashLogViewModel @Inject constructor(
     private val _selectedCrash = MutableStateFlow<CrashLog?>(null)
     val selectedCrash: StateFlow<CrashLog?> = _selectedCrash.asStateFlow()
 
+    private val _isLoadingSelectedCrash = MutableStateFlow(false)
+    val isLoadingSelectedCrash: StateFlow<Boolean> = _isLoadingSelectedCrash.asStateFlow()
+
     private var aiSearchJob: Job? = null
 
     companion object {
@@ -164,6 +167,22 @@ class CrashLogViewModel @Inject constructor(
 
     fun selectCrash(crash: CrashLog?) {
         _selectedCrash.value = crash
+    }
+
+    /**
+     * Ensure `selectedCrash` is populated for the given id. Called from the
+     * detail screen so the page re-hydrates correctly after process death.
+     */
+    fun ensureSelectedCrash(id: Long) {
+        if (_selectedCrash.value?.id == id) return
+        viewModelScope.launch {
+            _isLoadingSelectedCrash.value = true
+            try {
+                _selectedCrash.value = repository.getCrashById(id)
+            } finally {
+                _isLoadingSelectedCrash.value = false
+            }
+        }
     }
 
     fun refresh() {
