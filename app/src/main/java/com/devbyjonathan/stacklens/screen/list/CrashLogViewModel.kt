@@ -1,8 +1,11 @@
 package com.devbyjonathan.stacklens.screen.list
 
 import android.app.Application
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.devbyjonathan.stacklens.ai.CrashInsightService
+import com.devbyjonathan.stacklens.ai.ParseResult
 import com.devbyjonathan.stacklens.model.CrashFilter
 import com.devbyjonathan.stacklens.model.CrashGroup
 import com.devbyjonathan.stacklens.model.CrashLog
@@ -12,6 +15,7 @@ import com.devbyjonathan.stacklens.model.SortOrder
 import com.devbyjonathan.stacklens.repository.CrashLogRepository
 import com.devbyjonathan.stacklens.util.PermissionChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +25,9 @@ import javax.inject.Inject
 @HiltViewModel
 class CrashLogViewModel @Inject constructor(
     private val application: Application,
-    private val repository: CrashLogRepository
+    private val repository: CrashLogRepository,
+    private val crashInsightService: CrashInsightService,
+    private val sharedPreferences: SharedPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CrashLogUiState())
@@ -30,8 +36,15 @@ class CrashLogViewModel @Inject constructor(
     private val _selectedCrash = MutableStateFlow<CrashLog?>(null)
     val selectedCrash: StateFlow<CrashLog?> = _selectedCrash.asStateFlow()
 
+    private var aiSearchJob: Job? = null
+
+    companion object {
+        private const val PREF_AI_TOOLTIP_SHOWN = "ai_search_tooltip_shown"
+    }
+
     init {
         checkPermissions()
+        checkAiAvailability()
     }
 
     fun checkPermissions() {
@@ -113,10 +126,14 @@ class CrashLogViewModel @Inject constructor(
     }
 
     fun setSearchQuery(query: String) {
-        val newFilter = _uiState.value.filter.copy(
-            searchQuery = query.ifBlank { null }
-        )
-        updateFilter(newFilter)
+        if (_uiState.value.isAiSearchEnabled && query.isNotBlank()) {
+            performAiSearch(query)
+        } else {
+            val newFilter = _uiState.value.filter.copy(
+                searchQuery = query.ifBlank { null }
+            )
+            updateFilter(newFilter)
+        }
     }
 
     fun setTimeRange(hours: Int) {
@@ -162,6 +179,124 @@ class CrashLogViewModel @Inject constructor(
         }
         _uiState.value = _uiState.value.copy(expandedGroups = newExpanded)
     }
+
+    private fun checkAiAvailability() {
+        viewModelScope.launch {
+            val isAvailable = crashInsightService.isAvailable()
+            val tooltipShown = sharedPreferences.getBoolean(PREF_AI_TOOLTIP_SHOWN, false)
+            _uiState.value = _uiState.value.copy(
+                isAiSearchAvailable = isAvailable,
+                showAiTooltip = isAvailable && !tooltipShown
+            )
+            if (isAvailable) {
+                generateSuggestedPrompts()
+            }
+        }
+    }
+
+    fun toggleAiSearchMode() {
+        val newEnabled = !_uiState.value.isAiSearchEnabled
+        _uiState.value = _uiState.value.copy(
+            isAiSearchEnabled = newEnabled,
+            showAiTooltip = false
+        )
+        // Mark tooltip as shown when user first toggles AI mode
+        if (newEnabled && !sharedPreferences.getBoolean(PREF_AI_TOOLTIP_SHOWN, false)) {
+            sharedPreferences.edit().putBoolean(PREF_AI_TOOLTIP_SHOWN, true).apply()
+        }
+        // Regenerate prompts when AI mode is enabled
+        if (newEnabled) {
+            generateSuggestedPrompts()
+        }
+    }
+
+    fun dismissAiTooltip() {
+        _uiState.value = _uiState.value.copy(showAiTooltip = false)
+        sharedPreferences.edit().putBoolean(PREF_AI_TOOLTIP_SHOWN, true).apply()
+    }
+
+    private fun generateSuggestedPrompts() {
+        viewModelScope.launch {
+            val groups = _uiState.value.crashGroups.take(5)
+            val prompts = mutableListOf<String>()
+
+            // Generate prompts based on crash groups
+            for (group in groups) {
+                val appName = group.appName ?: continue
+                val exceptionType = group.exceptionType.substringAfterLast('.')
+                if (exceptionType.isNotBlank() && appName.isNotBlank()) {
+                    prompts.add("$exceptionType from $appName")
+                }
+            }
+
+            // Add some generic prompts if we don't have enough
+            if (prompts.size < 3) {
+                prompts.add("Crashes from today")
+            }
+            if (prompts.size < 3) {
+                prompts.add("ANRs from last 3 days")
+            }
+
+            _uiState.value = _uiState.value.copy(
+                suggestedPrompts = prompts.distinct().take(4)
+            )
+        }
+    }
+
+    fun applySuggestedPrompt(prompt: String) {
+        performAiSearch(prompt)
+    }
+
+    private fun performAiSearch(query: String) {
+        aiSearchJob?.cancel()
+        aiSearchJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isParsingQuery = true)
+
+            when (val result = crashInsightService.parseNaturalLanguageQuery(query)) {
+                is ParseResult.Success -> {
+                    val parsed = result.query
+                    val currentFilter = _uiState.value.filter
+                    val newFilter = currentFilter.copy(
+                        timeRangeHours = parsed.timeRangeHours ?: currentFilter.timeRangeHours,
+                        typeFilter = parsed.typeFilter ?: currentFilter.typeFilter,
+                        searchQuery = parsed.searchQuery ?: parsed.packageName,
+                        sortOrder = parsed.sortOrder ?: currentFilter.sortOrder
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        filter = newFilter,
+                        isParsingQuery = false
+                    )
+                    loadCrashLogs()
+                }
+
+                is ParseResult.Fallback -> {
+                    // Fall back to regular text search
+                    val newFilter = _uiState.value.filter.copy(
+                        searchQuery = result.originalQuery.ifBlank { null }
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        filter = newFilter,
+                        isParsingQuery = false
+                    )
+                    loadCrashLogs()
+                }
+
+                is ParseResult.Unavailable -> {
+                    // AI not available, fall back to text search
+                    val newFilter = _uiState.value.filter.copy(
+                        searchQuery = query.ifBlank { null }
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        filter = newFilter,
+                        isParsingQuery = false,
+                        isAiSearchAvailable = false,
+                        isAiSearchEnabled = false
+                    )
+                    loadCrashLogs()
+                }
+            }
+        }
+    }
 }
 
 data class CrashLogUiState(
@@ -176,4 +311,9 @@ data class CrashLogUiState(
     val stats: Map<CrashType, Int> = emptyMap(),
     val filter: CrashFilter = CrashFilter(),
     val error: String? = null,
+    val isAiSearchEnabled: Boolean = false,
+    val isAiSearchAvailable: Boolean = false,
+    val isParsingQuery: Boolean = false,
+    val suggestedPrompts: List<String> = emptyList(),
+    val showAiTooltip: Boolean = false,
 )
