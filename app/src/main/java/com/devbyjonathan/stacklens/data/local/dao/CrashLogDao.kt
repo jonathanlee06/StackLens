@@ -12,6 +12,9 @@ interface CrashLogDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(crashes: List<CrashLogEntity>)
 
+    @Query("SELECT * FROM crash_logs WHERE id = :id LIMIT 1")
+    suspend fun getCrashById(id: Long): CrashLogEntity?
+
     @Query("SELECT * FROM crash_logs ORDER BY timestamp DESC")
     suspend fun getAllCrashes(): List<CrashLogEntity>
 

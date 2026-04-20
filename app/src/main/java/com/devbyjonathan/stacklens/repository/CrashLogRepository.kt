@@ -80,6 +80,14 @@ class CrashLogRepository @Inject constructor(
     }
 
     /**
+     * Look up a single persisted crash by its id. Used to re-hydrate the
+     * detail screen after the process was killed.
+     */
+    suspend fun getCrashById(id: Long): CrashLog? {
+        return crashLogDao.getCrashById(id)?.toCrashLog()
+    }
+
+    /**
      * Get unique packages that have crashed
      */
     suspend fun getCrashedPackages(): List<String> {
