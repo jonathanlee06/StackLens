@@ -69,6 +69,7 @@ import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.theme.StackLensTheme
 import com.devbyjonathan.stacklens.util.StackTraceColors
 import com.devbyjonathan.stacklens.util.highlightStackTrace
+import com.devbyjonathan.stacklens.util.renderInlineMarkdown
 import com.devbyjonathan.uikit.theme.AppTypography
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -575,17 +576,21 @@ private fun InsightSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = content,
-            style = if (isCode) {
-                MaterialTheme.typography.bodySmall.copy(
+        if (isCode) {
+            Text(
+                text = content,
+                style = MaterialTheme.typography.bodySmall.copy(
                     fontFamily = FontFamily.Monospace
-                )
-            } else {
-                MaterialTheme.typography.bodyMedium
-            },
-            color = MaterialTheme.colorScheme.onSurface
-        )
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        } else {
+            Text(
+                text = renderInlineMarkdown(content),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 

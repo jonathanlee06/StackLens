@@ -52,6 +52,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devbyjonathan.stacklens.theme.StackLensTheme
+import com.devbyjonathan.stacklens.util.isAtLeastAndroid15
 import com.devbyjonathan.uikit.theme.AppTypography
 import com.devbyjonathan.uikit.theme.CodeTypography
 
@@ -179,18 +180,20 @@ fun PermissionScreen(
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (isAtLeastAndroid15()) {
+                Spacer(modifier = Modifier.height(16.dp))
 
-            PermissionCard(
-                title = "Read Dropbox Data Permission",
-                description = "Required to read crash logs from the system",
-                icon = Icons.Default.Archive,
-                isGranted = hasDropbox,
-                adbCommand = adbCommand_readDropBox,
-                onCopyCommand = {
-                    clipboardManager.setText(AnnotatedString(adbCommand_readDropBox))
-                }
-            )
+                PermissionCard(
+                    title = "Read Dropbox Data Permission",
+                    description = "Required to read crash logs from the system",
+                    icon = Icons.Default.Archive,
+                    isGranted = hasDropbox,
+                    adbCommand = adbCommand_readDropBox,
+                    onCopyCommand = {
+                        clipboardManager.setText(AnnotatedString(adbCommand_readDropBox))
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 

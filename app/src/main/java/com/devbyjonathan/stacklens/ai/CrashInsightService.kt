@@ -14,6 +14,8 @@ import com.devbyjonathan.stacklens.R
 import com.devbyjonathan.stacklens.data.local.dao.CrashInsightDao
 import com.devbyjonathan.stacklens.data.local.entity.CrashInsightEntity
 import com.devbyjonathan.stacklens.model.CrashLog
+import com.devbyjonathan.stacklens.model.CrashTypeFilter
+import com.devbyjonathan.stacklens.model.SortOrder
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
@@ -53,6 +55,20 @@ sealed class DownloadState {
     data class InProgress(val bytesDownloaded: Long) : DownloadState()
     data object Completed : DownloadState()
     data class Failed(val error: String) : DownloadState()
+}
+
+data class ParsedSearchQuery(
+    val timeRangeHours: Int? = null,
+    val typeFilter: CrashTypeFilter? = null,
+    val searchQuery: String? = null,
+    val packageName: String? = null,
+    val sortOrder: SortOrder? = null,
+)
+
+sealed class ParseResult {
+    data class Success(val query: ParsedSearchQuery) : ParseResult()
+    data class Fallback(val originalQuery: String) : ParseResult()
+    data object Unavailable : ParseResult()
 }
 
 @Singleton
@@ -448,5 +464,135 @@ AFFECTED_LINE: [The key line from the stack trace, or N/A]
             .minOrNull() ?: text.length
 
         return text.substring(contentStart, nextMarkerIndex).trim()
+    }
+
+    /**
+     * Parse a natural language search query into structured filters.
+     * Returns Fallback if AI parsing fails or nothing meaningful is extracted.
+     */
+    suspend fun parseNaturalLanguageQuery(query: String): ParseResult =
+        withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Parsing natural language query: $query")
+
+                val model = getOrCreateModel()
+                val status = model.checkStatus()
+                currentStatus = status
+
+                if (status != FeatureStatus.AVAILABLE) {
+                    Log.d(TAG, "Gemini Nano not available for query parsing")
+                    return@withContext ParseResult.Unavailable
+                }
+
+                val prompt = buildQueryParsePrompt(query)
+                Log.d(TAG, "Query parse prompt built, length: ${prompt.length} chars")
+
+                val request = generateContentRequest(TextPart(prompt)) {
+                    temperature = 0.1f
+                    topK = 8
+                }
+
+                Log.d(TAG, "Calling generateContent for query parsing...")
+                val startTime = System.currentTimeMillis()
+                val response = model.generateContent(request)
+                val elapsed = System.currentTimeMillis() - startTime
+                Log.d(TAG, "Query parsing completed in ${elapsed}ms")
+
+                val text = response.candidates.firstOrNull()?.text
+                if (text == null) {
+                    Log.w(TAG, "Empty response for query parsing")
+                    return@withContext ParseResult.Fallback(query)
+                }
+
+                Log.d(TAG, "Query parse response:\n$text")
+                parseQueryResponse(text, query)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse natural language query", e)
+                ParseResult.Fallback(query)
+            }
+        }
+
+    private fun buildQueryParsePrompt(query: String): String {
+        return """
+Parse this crash log search query into structured filters.
+
+Query: "$query"
+
+Extract these fields if mentioned (use NONE if not mentioned):
+- TIME_RANGE: Number of hours (1, 6, 24, 72, 168). Map: "last hour"=1, "today"/"yesterday"=24, "3 days"=72, "week"=168
+- TYPE_FILTER: One of ALL, CRASHES, ANRS, NATIVE
+- SEARCH_QUERY: Exception names, error types (e.g., NullPointerException, OutOfMemory)
+- PACKAGE_HINT: App name or package mentioned (e.g., "Gmail", "Chrome")
+- SORT_ORDER: NEWEST_FIRST or OLDEST_FIRST
+
+Respond in this exact format:
+TIME_RANGE: [value or NONE]
+TYPE_FILTER: [value or NONE]
+SEARCH_QUERY: [value or NONE]
+PACKAGE_HINT: [value or NONE]
+SORT_ORDER: [value or NONE]
+""".trimIndent()
+    }
+
+    private fun parseQueryResponse(response: String, originalQuery: String): ParseResult {
+        try {
+            val timeRangeStr = extractQueryField(response, "TIME_RANGE:")
+            val typeFilterStr = extractQueryField(response, "TYPE_FILTER:")
+            val searchQueryStr = extractQueryField(response, "SEARCH_QUERY:")
+            val packageHintStr = extractQueryField(response, "PACKAGE_HINT:")
+            val sortOrderStr = extractQueryField(response, "SORT_ORDER:")
+
+            val timeRange = timeRangeStr?.toIntOrNull()
+            val typeFilter = when (typeFilterStr?.uppercase()) {
+                "ALL" -> CrashTypeFilter.ALL
+                "CRASHES" -> CrashTypeFilter.CRASHES
+                "ANRS" -> CrashTypeFilter.ANRS
+                "NATIVE" -> CrashTypeFilter.NATIVE
+                else -> null
+            }
+            val searchQuery = searchQueryStr?.takeIf { it.isNotBlank() }
+            val packageName = packageHintStr?.takeIf { it.isNotBlank() }
+            val sortOrder = when (sortOrderStr?.uppercase()) {
+                "NEWEST_FIRST" -> SortOrder.NEWEST_FIRST
+                "OLDEST_FIRST" -> SortOrder.OLDEST_FIRST
+                else -> null
+            }
+
+            // If nothing meaningful was extracted, fall back to text search
+            if (timeRange == null && typeFilter == null && searchQuery == null &&
+                packageName == null && sortOrder == null
+            ) {
+                Log.d(TAG, "No meaningful filters extracted, falling back to text search")
+                return ParseResult.Fallback(originalQuery)
+            }
+
+            val parsed = ParsedSearchQuery(
+                timeRangeHours = timeRange,
+                typeFilter = typeFilter,
+                searchQuery = searchQuery,
+                packageName = packageName,
+                sortOrder = sortOrder
+            )
+            Log.d(TAG, "Parsed query: $parsed")
+            return ParseResult.Success(parsed)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse query response", e)
+            return ParseResult.Fallback(originalQuery)
+        }
+    }
+
+    private fun extractQueryField(text: String, marker: String): String? {
+        val startIndex = text.indexOf(marker, ignoreCase = true)
+        if (startIndex == -1) return null
+
+        val contentStart = startIndex + marker.length
+        val lineEnd = text.indexOf('\n', contentStart).takeIf { it > 0 } ?: text.length
+        val value = text.substring(contentStart, lineEnd).trim()
+
+        return if (value.equals("NONE", ignoreCase = true) || value.isBlank()) {
+            null
+        } else {
+            value
+        }
     }
 }

@@ -3,7 +3,6 @@ package com.devbyjonathan.stacklens.util
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Process
 
 object PermissionChecker {
@@ -17,14 +16,14 @@ object PermissionChecker {
     }
 
     fun hasReadDropBoxDataPermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            true
-        } else {
+        return if (isAtLeastAndroid15()) {
             context.checkPermission(
                 android.Manifest.permission.READ_DROPBOX_DATA,
                 Process.myPid(),
                 Process.myUid()
             ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
     }
 
