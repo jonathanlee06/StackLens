@@ -1,7 +1,6 @@
 package com.devbyjonathan.stacklens.screen.list
 
 import android.app.Application
-import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devbyjonathan.stacklens.ai.CrashInsightService
@@ -30,7 +29,6 @@ class CrashLogViewModel @Inject constructor(
     private val application: Application,
     private val repository: CrashLogRepository,
     private val crashInsightService: CrashInsightService,
-    private val sharedPreferences: SharedPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CrashLogUiState())
@@ -43,10 +41,6 @@ class CrashLogViewModel @Inject constructor(
     val isLoadingSelectedCrash: StateFlow<Boolean> = _isLoadingSelectedCrash.asStateFlow()
 
     private var aiSearchJob: Job? = null
-
-    companion object {
-        private const val PREF_AI_TOOLTIP_SHOWN = "ai_search_tooltip_shown"
-    }
 
     init {
         checkPermissions()
@@ -267,11 +261,7 @@ class CrashLogViewModel @Inject constructor(
     private fun checkAiAvailability() {
         viewModelScope.launch {
             val isAvailable = crashInsightService.isAvailable()
-            val tooltipShown = sharedPreferences.getBoolean(PREF_AI_TOOLTIP_SHOWN, false)
-            _uiState.value = _uiState.value.copy(
-                isAiSearchAvailable = isAvailable,
-                showAiTooltip = isAvailable && !tooltipShown
-            )
+            _uiState.value = _uiState.value.copy(isAiSearchAvailable = isAvailable)
             if (isAvailable) {
                 generateSuggestedPrompts()
             }
@@ -280,23 +270,10 @@ class CrashLogViewModel @Inject constructor(
 
     fun toggleAiSearchMode() {
         val newEnabled = !_uiState.value.isAiSearchEnabled
-        _uiState.value = _uiState.value.copy(
-            isAiSearchEnabled = newEnabled,
-            showAiTooltip = false
-        )
-        // Mark tooltip as shown when user first toggles AI mode
-        if (newEnabled && !sharedPreferences.getBoolean(PREF_AI_TOOLTIP_SHOWN, false)) {
-            sharedPreferences.edit().putBoolean(PREF_AI_TOOLTIP_SHOWN, true).apply()
-        }
-        // Regenerate prompts when AI mode is enabled
+        _uiState.value = _uiState.value.copy(isAiSearchEnabled = newEnabled)
         if (newEnabled) {
             generateSuggestedPrompts()
         }
-    }
-
-    fun dismissAiTooltip() {
-        _uiState.value = _uiState.value.copy(showAiTooltip = false)
-        sharedPreferences.edit().putBoolean(PREF_AI_TOOLTIP_SHOWN, true).apply()
     }
 
     private fun generateSuggestedPrompts() {
@@ -399,7 +376,6 @@ data class CrashLogUiState(
     val isAiSearchAvailable: Boolean = false,
     val isParsingQuery: Boolean = false,
     val suggestedPrompts: List<String> = emptyList(),
-    val showAiTooltip: Boolean = false,
     val eventsTrend: EventsTrend? = null,
     // Filter-sheet state derived from the broad (time-range-only) pool.
     val filterSheetCategoryCounts: Map<CrashCategory, Int> = emptyMap(),
