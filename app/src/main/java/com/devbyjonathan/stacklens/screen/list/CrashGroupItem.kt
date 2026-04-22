@@ -1,5 +1,6 @@
 package com.devbyjonathan.stacklens.screen.list
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -29,10 +30,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.devbyjonathan.stacklens.common.CrashTypeBadge
 import com.devbyjonathan.stacklens.model.CrashGroup
 import com.devbyjonathan.stacklens.model.CrashLog
+import com.devbyjonathan.stacklens.model.fake.PreviewData
+import com.devbyjonathan.stacklens.theme.StackLensTheme
+import com.devbyjonathan.uikit.theme.GoogleSansCode
+import com.devbyjonathan.uikit.theme.scheme
+import com.devbyjonathan.uikit.theme.typo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -90,9 +98,9 @@ fun CrashGroupItem(
                     ) {
                         Text(
                             text = group.appName ?: group.packageName ?: "Unknown",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = typo.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = scheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
@@ -106,9 +114,11 @@ fun CrashGroupItem(
                             Text(
                                 text = "${group.count}x",
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = color
+                                style = typo.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = color,
+                                fontFamily = GoogleSansCode,
+                                fontSize = 12.sp
                             )
                         }
                     }
@@ -118,10 +128,11 @@ fun CrashGroupItem(
                     // Exception type
                     Text(
                         text = group.exceptionType,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = typo.bodyMedium,
                         color = color,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        fontFamily = GoogleSansCode
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -136,10 +147,12 @@ fun CrashGroupItem(
                         if (group.appName != null && packageName != null) {
                             Text(
                                 text = packageName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = typo.bodySmall,
+                                color = scheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                fontFamily = GoogleSansCode,
+                                fontSize = 12.sp,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -154,7 +167,7 @@ fun CrashGroupItem(
                                     Icons.Default.KeyboardArrowDown
                                 },
                                 contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = scheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -165,8 +178,9 @@ fun CrashGroupItem(
                     // Time info
                     Text(
                         text = "Last: ${dateFormat.format(Date(group.lastOccurrence))}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = typo.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -238,8 +252,8 @@ private fun CrashGroupChildItem(
 
                 Text(
                     text = preview,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = typo.bodySmall,
+                    color = scheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -248,10 +262,137 @@ private fun CrashGroupChildItem(
 
                 Text(
                     text = dateFormat.format(Date(crash.timestamp)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = typo.labelSmall,
+                    color = scheme.onSurfaceVariant
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CrashGroupItemAllStates() {
+    val now = System.currentTimeMillis()
+    val appCrash = PreviewData.sampleCrashLogs[0]
+    val anr = PreviewData.sampleCrashLogs[1]
+    val tombstone = PreviewData.sampleCrashLogs[2]
+    val messenger = PreviewData.sampleCrashLogs[3]
+
+    val expandedGroup = CrashGroup(
+        signature = "sig-multi",
+        exceptionType = "IllegalStateException",
+        crashes = listOf(
+            messenger,
+            appCrash.copy(id = 101, timestamp = now - 1000 * 60 * 45),
+            messenger.copy(id = 102, timestamp = now - 1000 * 60 * 120),
+        ),
+        count = 8,
+        firstOccurrence = now - 1000 * 60 * 60 * 24,
+        lastOccurrence = now - 1000 * 60 * 3,
+    )
+    val anrGroup = CrashGroup(
+        signature = "sig-anr",
+        exceptionType = "ANR: Input dispatching timed out",
+        crashes = listOf(anr),
+        count = 3,
+        firstOccurrence = now - 1000 * 60 * 60 * 10,
+        lastOccurrence = now - 1000 * 60 * 15,
+    )
+    val tombstoneGroup = CrashGroup(
+        signature = "sig-tomb",
+        exceptionType = "Native abort: FORTIFY pthread_mutex_lock called on a destroyed mutex",
+        crashes = listOf(tombstone),
+        count = 1,
+        firstOccurrence = now - 1000 * 60 * 60 * 2,
+        lastOccurrence = now - 1000 * 60 * 30,
+    )
+    val noAppNameGroup = CrashGroup(
+        signature = "sig-noapp",
+        exceptionType = "RuntimeException",
+        crashes = listOf(appCrash.copy(appName = null)),
+        count = 2,
+        firstOccurrence = now - 1000 * 60 * 60,
+        lastOccurrence = now - 1000 * 60 * 10,
+    )
+    val singleCountGroup = PreviewData.sampleCrashGroup.copy(count = 1)
+
+    Column(
+        modifier = Modifier.padding(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        PreviewLabel("Collapsed — app crash")
+        CrashGroupItem(
+            group = PreviewData.sampleCrashGroup,
+            isExpanded = false,
+            onGroupClick = {},
+            onCrashClick = {},
+        )
+
+        PreviewLabel("Expanded — multiple children")
+        CrashGroupItem(
+            group = expandedGroup,
+            isExpanded = true,
+            onGroupClick = {},
+            onCrashClick = {},
+        )
+
+        PreviewLabel("Collapsed — ANR")
+        CrashGroupItem(
+            group = anrGroup,
+            isExpanded = false,
+            onGroupClick = {},
+            onCrashClick = {},
+        )
+
+        PreviewLabel("Expanded — tombstone (long text)")
+        CrashGroupItem(
+            group = tombstoneGroup,
+            isExpanded = true,
+            onGroupClick = {},
+            onCrashClick = {},
+        )
+
+        PreviewLabel("Collapsed — missing app name")
+        CrashGroupItem(
+            group = noAppNameGroup,
+            isExpanded = false,
+            onGroupClick = {},
+            onCrashClick = {},
+        )
+
+        PreviewLabel("Collapsed — single occurrence")
+        CrashGroupItem(
+            group = singleCountGroup,
+            isExpanded = false,
+            onGroupClick = {},
+            onCrashClick = {},
+        )
+    }
+}
+
+@Composable
+private fun PreviewLabel(text: String) {
+    Text(
+        text = text,
+        style = typo.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = scheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+}
+
+@Preview(showBackground = true, heightDp = 1800)
+@Composable
+private fun CrashGroupItemAllStatesPreview() {
+    StackLensTheme {
+        CrashGroupItemAllStates()
+    }
+}
+
+@Preview(showBackground = true, heightDp = 1800, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun CrashGroupItemAllStatesDarkPreview() {
+    StackLensTheme {
+        CrashGroupItemAllStates()
     }
 }

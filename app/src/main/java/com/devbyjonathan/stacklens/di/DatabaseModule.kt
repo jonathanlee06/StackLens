@@ -38,6 +38,19 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE crash_insights ADD COLUMN severity TEXT NOT NULL DEFAULT 'MEDIUM'")
+            db.execSQL("ALTER TABLE crash_insights ADD COLUMN confidence REAL NOT NULL DEFAULT 0.7")
+        }
+    }
+
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE crash_insights ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): StackLensDatabase {
@@ -46,7 +59,7 @@ object DatabaseModule {
             StackLensDatabase::class.java,
             StackLensDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             // Enable foreign key constraints
             .addCallback(object : androidx.room.RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {

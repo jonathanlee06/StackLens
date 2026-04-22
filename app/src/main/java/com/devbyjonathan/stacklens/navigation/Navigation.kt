@@ -7,6 +7,10 @@ sealed class Screen(val route: String) {
         const val ARG_CRASH_ID = "crashId"
         fun buildRoute(crashId: Long) = "crash_detail/$crashId"
     }
+    data object AiInsight : Screen("ai_insight/{crashId}") {
+        const val ARG_CRASH_ID = "crashId"
+        fun buildRoute(crashId: Long) = "ai_insight/$crashId"
+    }
     data object Terms : Screen("terms")
     data object Privacy : Screen("privacy")
 }

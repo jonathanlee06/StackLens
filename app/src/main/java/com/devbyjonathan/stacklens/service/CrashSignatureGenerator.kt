@@ -1,6 +1,7 @@
 package com.devbyjonathan.stacklens.service
 
 import com.devbyjonathan.stacklens.model.CrashType
+import com.devbyjonathan.stacklens.util.isFrameworkFrame
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -77,13 +78,7 @@ class CrashSignatureGenerator @Inject constructor() {
                 val frame = match.groupValues[1]
                 frame.replace(Regex(":\\d+\\)"), ")")
             }
-            .filter { frame ->
-                // Filter out common framework frames that don't help with grouping
-                !frame.startsWith("android.") &&
-                        !frame.startsWith("java.lang.reflect.") &&
-                        !frame.startsWith("dalvik.") &&
-                        !frame.startsWith("com.android.internal.")
-            }
+            .filter { frame -> !isFrameworkFrame(frame) }
             .take(count)
             .toList()
     }
