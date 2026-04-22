@@ -25,12 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
@@ -53,7 +51,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
@@ -70,6 +67,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -81,6 +79,10 @@ import com.devbyjonathan.stacklens.model.CrashTypeFilter
 import com.devbyjonathan.stacklens.model.SortOrder
 import com.devbyjonathan.stacklens.model.fake.PreviewData.sampleUiState
 import com.devbyjonathan.stacklens.theme.StackLensTheme
+import com.devbyjonathan.uikit.theme.AppTypography
+import com.devbyjonathan.uikit.theme.CodeTypography
+import com.devbyjonathan.uikit.theme.scheme
+import com.devbyjonathan.uikit.theme.typo
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -112,7 +114,7 @@ fun CrashLogListContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(scheme.background)
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
@@ -201,7 +203,7 @@ fun DurationOptionsContent(
     ) {
         Text(
             text = "Time Range",
-            style = MaterialTheme.typography.titleLarge,
+            style = typo.titleLarge,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
         )
 
@@ -216,20 +218,20 @@ fun DurationOptionsContent(
                 Icon(
                     imageVector = Icons.Default.Timer,
                     contentDescription = null,
-                    tint = if (selectedHours == hours) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = if (selectedHours == hours) scheme.primary
+                    else scheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = typo.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
                 if (selectedHours == hours) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = scheme.primary
                     )
                 }
             }
@@ -249,7 +251,7 @@ fun SortOptionsContent(
     ) {
         Text(
             text = "Sort Order",
-            style = MaterialTheme.typography.titleLarge,
+            style = typo.titleLarge,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
         )
 
@@ -267,20 +269,20 @@ fun SortOptionsContent(
                         SortOrder.OLDEST_FIRST -> Icons.Default.ArrowUpward
                     },
                     contentDescription = null,
-                    tint = if (selectedOrder == order) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = if (selectedOrder == order) scheme.primary
+                    else scheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
                     text = order.displayName,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = typo.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
                 if (selectedOrder == order) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = scheme.primary
                     )
                 }
             }
@@ -305,75 +307,75 @@ fun CrashTypeFilterRow(
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background),
+            .background(scheme.background),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp)
     ) {
-        item {
-            // Duration pill
-            FilterChip(
-                shape = RoundedCornerShape(50.dp),
-                selected = false,
-                onClick = { onClickDuration() },
-                label = {
-                    Text(
-                        when (uiState.filter.timeRangeHours) {
-                            1 -> "Last 1 hour"
-                            6 -> "Last 6 hours"
-                            24 -> "Last 24 hours"
-                            72 -> "Last 3 days"
-                            168 -> "Last 7 days"
-                            else -> "Last ${uiState.filter.timeRangeHours} hour(s)"
-                        }
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
-        }
-        item {
-            // Sort pill
-            FilterChip(
-                shape = RoundedCornerShape(50.dp),
-                selected = false,
-                onClick = onClickSort,
-                label = {
-                    Text(
-                        when (uiState.filter.sortOrder) {
-                            SortOrder.NEWEST_FIRST -> "Newest"
-                            SortOrder.OLDEST_FIRST -> "Oldest"
-                        }
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
-        }
-        item {
-            VerticalDivider(
-                modifier = Modifier
-                    .padding(vertical = 8.dp)
-                    .height(24.dp),
-                thickness = 1.dp
-            )
-        }
+//        item {
+//            // Duration pill
+//            FilterChip(
+//                shape = RoundedCornerShape(50.dp),
+//                selected = false,
+//                onClick = { onClickDuration() },
+//                label = {
+//                    Text(
+//                        when (uiState.filter.timeRangeHours) {
+//                            1 -> "Last 1 hour"
+//                            6 -> "Last 6 hours"
+//                            24 -> "Last 24 hours"
+//                            72 -> "Last 3 days"
+//                            168 -> "Last 7 days"
+//                            else -> "Last ${uiState.filter.timeRangeHours} hour(s)"
+//                        }
+//                    )
+//                },
+//                leadingIcon = {
+//                    Icon(
+//                        imageVector = Icons.Default.CalendarToday,
+//                        contentDescription = null,
+//                        modifier = Modifier.size(18.dp)
+//                    )
+//                }
+//            )
+//        }
+//        item {
+//            // Sort pill
+//            FilterChip(
+//                shape = RoundedCornerShape(50.dp),
+//                selected = false,
+//                onClick = onClickSort,
+//                label = {
+//                    Text(
+//                        when (uiState.filter.sortOrder) {
+//                            SortOrder.NEWEST_FIRST -> "Newest"
+//                            SortOrder.OLDEST_FIRST -> "Oldest"
+//                        }
+//                    )
+//                },
+//                leadingIcon = {
+//                    Icon(
+//                        imageVector = Icons.AutoMirrored.Filled.Sort,
+//                        contentDescription = null,
+//                        modifier = Modifier.size(18.dp)
+//                    )
+//                }
+//            )
+//        }
+//        item {
+//            VerticalDivider(
+//                modifier = Modifier
+//                    .padding(vertical = 8.dp)
+//                    .height(24.dp),
+//                thickness = 1.dp
+//            )
+//        }
 
         item {
             CrashTypeFilterChip(
                 label = "All",
                 count = totalCount,
-                color = MaterialTheme.colorScheme.primary,
+                color = scheme.primary,
                 selected = selectedFilter == CrashTypeFilter.ALL,
                 onClick = { onFilterChange(CrashTypeFilter.ALL) }
             )
@@ -382,16 +384,16 @@ fun CrashTypeFilterRow(
             CrashTypeFilterChip(
                 label = "Crashes",
                 count = crashCount,
-                color = MaterialTheme.colorScheme.error,
+                color = scheme.error,
                 selected = selectedFilter == CrashTypeFilter.CRASHES,
                 onClick = { onFilterChange(CrashTypeFilter.CRASHES) }
             )
         }
         item {
             CrashTypeFilterChip(
-                label = "ANRs",
+                label = "ANR",
                 count = anrCount,
-                color = MaterialTheme.colorScheme.tertiary,
+                color = scheme.tertiary,
                 selected = selectedFilter == CrashTypeFilter.ANRS,
                 onClick = { onFilterChange(CrashTypeFilter.ANRS) }
             )
@@ -400,7 +402,7 @@ fun CrashTypeFilterRow(
             CrashTypeFilterChip(
                 label = "Native",
                 count = nativeCount,
-                color = MaterialTheme.colorScheme.secondary,
+                color = scheme.secondary,
                 selected = selectedFilter == CrashTypeFilter.NATIVE,
                 onClick = { onFilterChange(CrashTypeFilter.NATIVE) }
             )
@@ -416,41 +418,48 @@ fun CrashTypeFilterChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val isAll = label == "All"
     FilterChip(
         shape = RoundedCornerShape(50.dp),
         selected = selected,
         onClick = onClick,
         label = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (selected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = color
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-                Text(label)
-                if (label != "All" && selected.not()) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Surface(
-                        color = if (selected) color else color.copy(alpha = 0.2f),
-                        shape = MaterialTheme.shapes.extraSmall
-                    ) {
-                        Text(
-                            text = count.toString(),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (selected) Color.White else color
+                if (isAll) {
+                    if (selected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(color = color, shape = CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                 }
+                Text(
+                    text = label,
+                    style = AppTypography.labelSmall.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = count.toString(),
+                    style = CodeTypography.labelSmall.copy(
+                        fontSize = 11.sp
+                    )
+                )
             }
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = color.copy(alpha = 0.15f),
-            selectedLabelColor = color
+            selectedContainerColor = scheme.primary,
+            selectedLabelColor = scheme.onPrimary
         )
     )
 }
@@ -472,8 +481,17 @@ fun CrashLogList(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 16.dp)
     ) {
+        item {
+            EventsSparklineHeader(
+                trend = uiState.eventsTrend,
+                windowLabel = "7D",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
         item {
             Search(
                 searchQuery = searchQuery,
@@ -504,14 +522,7 @@ fun CrashLogList(
         when {
             uiState.isLoading -> {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    CrashListSkeleton(modifier = Modifier.padding(top = 8.dp))
                 }
             }
             uiState.error != null -> {
@@ -532,7 +543,7 @@ fun CrashLogList(
                         group = group,
                         isExpanded = group.signature in uiState.expandedGroups,
                         onGroupClick = { onGroupExpand(group.signature) },
-                        onCrashClick = onCrashClick
+                        onCrashClick = onCrashClick,
                     )
                 }
             }
@@ -589,8 +600,8 @@ fun CrashLogItem(
                 ) {
                     Text(
                         text = crash.appName ?: crash.packageName ?: "Unknown",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.titleMedium,
+                        color = scheme.onSurface,
+                        style = typo.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -603,8 +614,8 @@ fun CrashLogItem(
                 if (crash.appName != null && crash.packageName != null) {
                     Text(
                         text = crash.packageName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = typo.bodySmall,
+                        color = scheme.onSurfaceVariant
                     )
                 }
 
@@ -617,7 +628,7 @@ fun CrashLogItem(
 
                 Text(
                     text = preview,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = typo.bodySmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = color
@@ -627,8 +638,8 @@ fun CrashLogItem(
 
                 Text(
                     text = dateFormat.format(Date(crash.timestamp)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = typo.labelSmall,
+                    color = scheme.onSurfaceVariant
                 )
             }
         }
@@ -639,13 +650,13 @@ fun CrashLogItem(
 fun getCrashTypeIconAndColor(type: CrashType): Pair<ImageVector, Color> {
     return when (type) {
         CrashType.DATA_APP_CRASH, CrashType.SYSTEM_APP_CRASH ->
-            Icons.Default.BugReport to MaterialTheme.colorScheme.error
+            Icons.Default.BugReport to scheme.error
         CrashType.DATA_APP_ANR, CrashType.SYSTEM_APP_ANR ->
-            Icons.Default.Timer to MaterialTheme.colorScheme.tertiary
+            Icons.Default.Timer to scheme.tertiary
         CrashType.SYSTEM_TOMBSTONE ->
-            Icons.Default.Memory to MaterialTheme.colorScheme.secondary
+            Icons.Default.Memory to scheme.secondary
         else ->
-            Icons.Default.Error to MaterialTheme.colorScheme.outline
+            Icons.Default.Error to scheme.outline
     }
 }
 
@@ -659,8 +670,8 @@ fun ErrorMessage(message: String) {
     ) {
         Text(
             text = message,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyLarge
+            color = scheme.error,
+            style = typo.bodyLarge
         )
     }
 }
@@ -676,13 +687,13 @@ fun EmptyState() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "No crashes found",
-                style = MaterialTheme.typography.titleLarge
+                style = typo.titleLarge
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Your apps are running smoothly!",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = typo.bodyMedium,
+                color = scheme.onSurfaceVariant
             )
         }
     }
@@ -727,7 +738,7 @@ private fun Search(
                 maxLines = 1,
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = scheme.onSurface,
                     fontSize = 16.sp
                 ),
                 keyboardActions = KeyboardActions(
@@ -736,7 +747,7 @@ private fun Search(
                         focusManager.clearFocus()
                     }
                 ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                cursorBrush = SolidColor(scheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -748,7 +759,7 @@ private fun Search(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                color = scheme.surfaceContainer,
                                 shape = RoundedCornerShape(size = 50.dp)
                             )
                             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
@@ -758,7 +769,7 @@ private fun Search(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search icon",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = scheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(width = 8.dp))
 
@@ -770,9 +781,12 @@ private fun Search(
                             if (isHintDisplayed) {
                                 Text(
                                     text = if (isAiSearchEnabled) "Try \"NullPointer crashes from Gmail\"" else "Search crashes...",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = scheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
+                                    style = typo.bodySmall.copy(
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 )
                             }
                             innerTextField()
@@ -796,7 +810,7 @@ private fun Search(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Clear search",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = scheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -819,16 +833,16 @@ private fun Search(
                                         .size(36.dp)
                                         .background(
                                             color = if (isAiSearchEnabled)
-                                                MaterialTheme.colorScheme.primaryContainer
+                                                scheme.primaryContainer
                                             else
                                                 Color.Transparent,
                                             shape = CircleShape
                                         ),
                                     colors = IconButtonDefaults.iconButtonColors(
                                         contentColor = if (isAiSearchEnabled)
-                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                            scheme.onPrimaryContainer
                                         else
-                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                            scheme.onSurfaceVariant
                                     )
                                 ) {
                                     Icon(
@@ -884,9 +898,9 @@ private fun SuggestedPromptsRow(
                     )
                 },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    labelColor = MaterialTheme.colorScheme.onSurface,
-                    iconContentColor = MaterialTheme.colorScheme.primary
+                    containerColor = scheme.surfaceContainerHigh,
+                    labelColor = scheme.onSurface,
+                    iconContentColor = scheme.primary
                 )
             )
         }
@@ -918,6 +932,44 @@ private fun CrashLogListContentDarkPreview() {
     StackLensTheme {
         CrashLogListContent(
             uiState = sampleUiState,
+            onRefresh = {},
+            onSearchQueryChange = {},
+            onCrashClick = {},
+            onTimeRangeChange = {},
+            onSortOrderChange = {},
+            onTypeFilterChange = {},
+            onToggleAiSearch = {},
+            onDismissAiTooltip = {},
+            onSuggestedPromptClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CrashLogListContentLoadingPreview() {
+    StackLensTheme {
+        CrashLogListContent(
+            uiState = sampleUiState.copy(isLoading = true, crashGroups = emptyList()),
+            onRefresh = {},
+            onSearchQueryChange = {},
+            onCrashClick = {},
+            onTimeRangeChange = {},
+            onSortOrderChange = {},
+            onTypeFilterChange = {},
+            onToggleAiSearch = {},
+            onDismissAiTooltip = {},
+            onSuggestedPromptClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun CrashLogListContentLoadingDarkPreview() {
+    StackLensTheme {
+        CrashLogListContent(
+            uiState = sampleUiState.copy(isLoading = true, crashGroups = emptyList()),
             onRefresh = {},
             onSearchQueryChange = {},
             onCrashClick = {},

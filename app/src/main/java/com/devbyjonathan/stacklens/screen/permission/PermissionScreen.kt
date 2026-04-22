@@ -55,6 +55,8 @@ import com.devbyjonathan.stacklens.theme.StackLensTheme
 import com.devbyjonathan.stacklens.util.isAtLeastAndroid15
 import com.devbyjonathan.uikit.theme.AppTypography
 import com.devbyjonathan.uikit.theme.CodeTypography
+import com.devbyjonathan.uikit.theme.scheme
+import com.devbyjonathan.uikit.theme.typo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,13 +81,13 @@ fun PermissionScreen(
         bottomBar = {
             Box(
                 modifier = Modifier
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(scheme.background)
                     .padding(16.dp)
                     .navigationBarsPadding()
             ) {
                 Button(
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        containerColor = scheme.primary,
                     ),
                     onClick = onCheckPermissions,
                     modifier = Modifier.fillMaxWidth()
@@ -95,7 +97,7 @@ fun PermissionScreen(
                         style = AppTypography.bodyMedium.copy(
                             fontWeight = FontWeight.Medium
                         ),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = scheme.onPrimary,
                     )
                 }
             }
@@ -116,14 +118,14 @@ fun PermissionScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .background(scheme.primaryContainer)
                         .padding(20.dp)
                 ) {
                     Icon(
                         modifier = Modifier.size(30.dp),
                         imageVector = Icons.Default.Security,
                         contentDescription = "Permissions",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = scheme.onPrimaryContainer
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -140,7 +142,7 @@ fun PermissionScreen(
                     style = AppTypography.bodyMedium.copy(
                         textAlign = TextAlign.Center
                     ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = scheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -204,7 +206,7 @@ fun PermissionScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "How to grant ADB permission",
-                        style = MaterialTheme.typography.titleMedium
+                        style = typo.titleMedium
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -221,7 +223,7 @@ fun PermissionScreen(
                     steps.forEachIndexed { index, step ->
                         Text(
                             text = "${index + 1}. $step",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = typo.bodyMedium,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
@@ -245,18 +247,18 @@ private fun PermissionCard(
     onCopyCommand: (() -> Unit)? = null
 ) {
     val color = if (isGranted) {
-        MaterialTheme.colorScheme.onPrimaryContainer
+        scheme.onPrimaryContainer
     } else {
-        MaterialTheme.colorScheme.error
+        scheme.error
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isGranted) {
-                MaterialTheme.colorScheme.primaryContainer
+                scheme.primaryContainer
             } else {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                scheme.errorContainer.copy(alpha = 0.5f)
             }
         )
     ) {
@@ -290,11 +292,12 @@ private fun PermissionCard(
                             .basicMarquee(),
                         text = title,
                         style = AppTypography.titleMedium,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         color = if (isGranted) {
-                            MaterialTheme.colorScheme.primary
+                            scheme.primary
                         } else {
-                            MaterialTheme.colorScheme.error
+                            scheme.error
                         }
                     )
                     Text(
@@ -303,9 +306,9 @@ private fun PermissionCard(
                             fontWeight = FontWeight.Medium
                         ),
                         color = if (isGranted) {
-                            MaterialTheme.colorScheme.primary
+                            scheme.primary
                         } else {
-                            MaterialTheme.colorScheme.error
+                            scheme.error
                         }
                     )
                 }
@@ -315,7 +318,7 @@ private fun PermissionCard(
             Text(
                 text = description,
                 style = AppTypography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = scheme.onSurface
             )
 
             if (!isGranted) {
@@ -324,7 +327,7 @@ private fun PermissionCard(
                 if (adbCommand != null && onCopyCommand != null) {
                     // ADB command display
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = scheme.surfaceVariant,
                         shape = MaterialTheme.shapes.small
                     ) {
                         SelectionContainer {
@@ -338,7 +341,7 @@ private fun PermissionCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            containerColor = scheme.error,
                         ),
                         onClick = onCopyCommand,
                         modifier = Modifier.fillMaxWidth()
@@ -348,13 +351,13 @@ private fun PermissionCard(
                             style = AppTypography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium
                             ),
-                            color = MaterialTheme.colorScheme.error
+                            color = scheme.errorContainer
                         )
                     }
                 } else if (onGrantClick != null && grantButtonText != null) {
                     Button(
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            containerColor = scheme.error,
                         ),
                         onClick = onGrantClick,
                         modifier = Modifier.fillMaxWidth()
@@ -364,7 +367,7 @@ private fun PermissionCard(
                             style = AppTypography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium
                             ),
-                            color = MaterialTheme.colorScheme.error,
+                            color = scheme.errorContainer,
                         )
                     }
                 }

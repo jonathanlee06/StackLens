@@ -31,6 +31,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.devbyjonathan.stacklens.ai.CrashInsightService
 import com.devbyjonathan.stacklens.navigation.Screen
+import com.devbyjonathan.stacklens.screen.detail.AiInsightScreen
 import com.devbyjonathan.stacklens.screen.detail.CrashDetailScreen
 import com.devbyjonathan.stacklens.screen.list.CrashLogViewModel
 import com.devbyjonathan.stacklens.screen.permission.PermissionScreen
@@ -168,7 +169,10 @@ class MainActivity : ComponentActivity() {
                             onPrivacyClick = { navController.navigate(Screen.Privacy.route) },
                             onToggleAiSearch = { vm.toggleAiSearchMode() },
                             onDismissAiTooltip = { vm.dismissAiTooltip() },
-                            onSuggestedPromptClick = { vm.applySuggestedPrompt(it) }
+                            onSuggestedPromptClick = { vm.applySuggestedPrompt(it) },
+                            onApplyFilterSheet = { hours, custom, categories, packages ->
+                                vm.applyFilterSheet(hours, custom, categories, packages)
+                            }
                         )
                     }
 
@@ -195,7 +199,10 @@ class MainActivity : ComponentActivity() {
                                 CrashDetailScreen(
                                     crash = resolved,
                                     onBackClick = { navController.popBackStack() },
-                                    crashInsightService = crashInsightService
+                                    crashInsightService = crashInsightService,
+                                    onAiInsightClick = {
+                                        navController.navigate(Screen.AiInsight.buildRoute(resolved.id))
+                                    }
                                 )
                             }
 
@@ -215,6 +222,55 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     Text("Crash no longer available.")
                                 }
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
+                            }
+                        }
+                    }
+
+                    composable(
+                        route = Screen.AiInsight.route,
+                        arguments = listOf(
+                            navArgument(Screen.AiInsight.ARG_CRASH_ID) {
+                                type = NavType.LongType
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val crashId = backStackEntry.arguments
+                            ?.getLong(Screen.AiInsight.ARG_CRASH_ID)
+
+                        LaunchedEffect(crashId) {
+                            crashId?.let { vm.ensureSelectedCrash(it) }
+                        }
+
+                        val resolved = selectedCrash?.takeIf { it.id == crashId }
+                        val loading by vm.isLoadingSelectedCrash.collectAsState()
+                        val similarCount = resolved?.let { crash ->
+                            uiState.crashGroups.firstOrNull { it.latestCrash.id == crash.id }?.count
+                                ?: 1
+                        } ?: 1
+
+                        when {
+                            resolved != null -> {
+                                AiInsightScreen(
+                                    crash = resolved,
+                                    similarCount = similarCount,
+                                    crashInsightService = crashInsightService,
+                                    onBackClick = { navController.popBackStack() },
+                                )
+                            }
+
+                            loading || crashId == null -> {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+
+                            else -> {
                                 LaunchedEffect(Unit) {
                                     navController.popBackStack()
                                 }

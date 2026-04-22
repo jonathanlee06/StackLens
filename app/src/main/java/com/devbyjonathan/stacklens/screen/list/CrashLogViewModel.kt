@@ -6,13 +6,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devbyjonathan.stacklens.ai.CrashInsightService
 import com.devbyjonathan.stacklens.ai.ParseResult
+import com.devbyjonathan.stacklens.model.CrashCategory
 import com.devbyjonathan.stacklens.model.CrashFilter
 import com.devbyjonathan.stacklens.model.CrashGroup
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.model.CrashTypeFilter
+import com.devbyjonathan.stacklens.model.CustomTimeRange
 import com.devbyjonathan.stacklens.model.SortOrder
 import com.devbyjonathan.stacklens.repository.CrashLogRepository
+import com.devbyjonathan.stacklens.repository.EventsTrend
 import com.devbyjonathan.stacklens.util.PermissionChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -74,10 +77,46 @@ class CrashLogViewModel @Inject constructor(
 
             try {
                 val filter = _uiState.value.filter
-                var logs = repository.getCrashLogs(filter)
+                // Broad pool: time-range (custom range respected) + search only. Used for
+                // filter-sheet counts so badges reflect the whole time range regardless of
+                // the category/package selection currently applied.
+                val broadFilter = filter.copy(
+                    selectedCategories = emptySet(),
+                    selectedPackages = emptySet(),
+                    packageName = null,
+                )
+                val broadLogs = repository.getCrashLogs(broadFilter)
                 val stats = repository.getCrashStats(filter.timeRangeHours)
 
-                // Apply type filter
+                val categoryCounts: Map<CrashCategory, Int> =
+                    CrashCategory.entries.associateWith { cat ->
+                        broadLogs.count { it.tag in cat.crashTypes }
+                    }
+                val appFilterItems: List<AppFilterItem> = broadLogs
+                    .filter { it.packageName != null }
+                    .groupBy { it.packageName!! }
+                    .map { (pkg, logs) ->
+                        AppFilterItem(
+                            packageName = pkg,
+                            appName = logs.firstNotNullOfOrNull { it.appName },
+                            count = logs.size,
+                        )
+                    }
+                    .sortedWith(
+                        compareByDescending<AppFilterItem> { it.count }
+                            .thenBy { (it.appName ?: it.packageName).lowercase() }
+                    )
+
+                // Apply in-memory dimensional filters to produce the displayed list.
+                var logs = broadLogs.filter { log ->
+                    val matchesCategory = filter.selectedCategories.isEmpty() ||
+                            filter.selectedCategories.any { log.tag in it.crashTypes }
+                    val matchesPackage = filter.selectedPackages.isEmpty() ||
+                            (log.packageName != null && log.packageName in filter.selectedPackages)
+                    matchesCategory && matchesPackage
+                }
+
+                // Apply legacy type-pill filter
                 logs = when (filter.typeFilter) {
                     CrashTypeFilter.ALL -> logs
                     CrashTypeFilter.CRASHES -> logs.filter { it.tag in CrashType.appCrashTags }
@@ -91,9 +130,8 @@ class CrashLogViewModel @Inject constructor(
                     SortOrder.OLDEST_FIRST -> logs.sortedBy { it.timestamp }
                 }
 
-                // Load grouped crashes (always enabled)
+                // Load grouped crashes (respects new filter fields via repository).
                 val groups = repository.getGroupedCrashLogs(filter).let { allGroups ->
-                    // Apply type filter to groups
                     when (filter.typeFilter) {
                         CrashTypeFilter.ALL -> allGroups
                         CrashTypeFilter.CRASHES -> allGroups.filter { it.crashType in CrashType.appCrashTags }
@@ -102,11 +140,17 @@ class CrashLogViewModel @Inject constructor(
                     }
                 }
 
+                val eventsTrend = runCatching { repository.getEventsTrend(days = 7) }.getOrNull()
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     crashLogs = logs,
                     crashGroups = groups,
-                    stats = stats
+                    stats = stats,
+                    eventsTrend = eventsTrend,
+                    filterSheetCategoryCounts = categoryCounts,
+                    filterSheetApps = appFilterItems,
+                    filterSheetMatchingCount = logs.size,
                 )
             } catch (e: SecurityException) {
                 _uiState.value = _uiState.value.copy(
@@ -151,6 +195,27 @@ class CrashLogViewModel @Inject constructor(
 
     fun setTypeFilter(typeFilter: CrashTypeFilter) {
         val newFilter = _uiState.value.filter.copy(typeFilter = typeFilter)
+        updateFilter(newFilter)
+    }
+
+    /**
+     * Commit the filter-sheet selection in one shot. The sheet is the new source of truth
+     * for time range, category, and package filters, so we also reset [CrashTypeFilter]
+     * pills to ALL to avoid the pill and the sheet silently fighting.
+     */
+    fun applyFilterSheet(
+        timeRangeHours: Int,
+        customTimeRange: CustomTimeRange?,
+        selectedCategories: Set<CrashCategory>,
+        selectedPackages: Set<String>,
+    ) {
+        val newFilter = _uiState.value.filter.copy(
+            timeRangeHours = timeRangeHours,
+            customTimeRange = customTimeRange,
+            selectedCategories = selectedCategories,
+            selectedPackages = selectedPackages,
+            typeFilter = CrashTypeFilter.ALL,
+        )
         updateFilter(newFilter)
     }
 
@@ -335,4 +400,15 @@ data class CrashLogUiState(
     val isParsingQuery: Boolean = false,
     val suggestedPrompts: List<String> = emptyList(),
     val showAiTooltip: Boolean = false,
+    val eventsTrend: EventsTrend? = null,
+    // Filter-sheet state derived from the broad (time-range-only) pool.
+    val filterSheetCategoryCounts: Map<CrashCategory, Int> = emptyMap(),
+    val filterSheetApps: List<AppFilterItem> = emptyList(),
+    val filterSheetMatchingCount: Int = 0,
+)
+
+data class AppFilterItem(
+    val packageName: String,
+    val appName: String?,
+    val count: Int,
 )
