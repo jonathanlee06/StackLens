@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="splash_background">#FFFFFF</color>
+    <!-- Matches Compose scheme.background so predictive-back cross-fades don't
+         briefly reveal the framework-default (black) window background. -->
+    <color name="window_background">#F6F3EE</color>
 </resources>

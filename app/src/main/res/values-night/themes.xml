@@ -1,9 +1,12 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
     <!-- Base application theme. -->
     <style name="Theme.StackLens" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
         <!-- Set the status bar to be translucent -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <!-- Making the navigation bar translucent on Android 8.0 (API level 26) and higher -->
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Background shown behind the Compose window during navigation cross-fades
+             and predictive-back previews. Must match scheme.background. -->
+        <item name="android:windowBackground">@color/window_background</item>
     </style>
 </resources>
