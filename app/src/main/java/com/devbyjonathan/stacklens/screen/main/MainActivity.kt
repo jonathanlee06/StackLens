@@ -168,7 +168,6 @@ class MainActivity : ComponentActivity() {
                             onTermsClick = { navController.navigate(Screen.Terms.route) },
                             onPrivacyClick = { navController.navigate(Screen.Privacy.route) },
                             onToggleAiSearch = { vm.toggleAiSearchMode() },
-                            onDismissAiTooltip = { vm.dismissAiTooltip() },
                             onSuggestedPromptClick = { vm.applySuggestedPrompt(it) },
                             onApplyFilterSheet = { hours, custom, categories, packages ->
                                 vm.applyFilterSheet(hours, custom, categories, packages)

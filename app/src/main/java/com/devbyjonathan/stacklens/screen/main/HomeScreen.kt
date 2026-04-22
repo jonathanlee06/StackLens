@@ -94,7 +94,6 @@ fun HomeScreen(
     onTermsClick: () -> Unit,
     onPrivacyClick: () -> Unit,
     onToggleAiSearch: () -> Unit = {},
-    onDismissAiTooltip: () -> Unit = {},
     onSuggestedPromptClick: (String) -> Unit = {},
     onApplyFilterSheet: (
         timeRangeHours: Int,
@@ -263,7 +262,6 @@ fun HomeScreen(
                     onTypeFilterChange = onTypeFilterChange,
                     onGroupExpand = onGroupExpand,
                     onToggleAiSearch = onToggleAiSearch,
-                    onDismissAiTooltip = onDismissAiTooltip,
                     onSuggestedPromptClick = onSuggestedPromptClick
                 )
                 1 -> SettingsScreen(
@@ -311,7 +309,6 @@ fun HomeScreenPreview() {
             onTermsClick = {},
             onPrivacyClick = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }
@@ -337,7 +334,6 @@ fun HomeScreenDarkPreview() {
             onTermsClick = {},
             onPrivacyClick = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }

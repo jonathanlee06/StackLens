@@ -44,15 +44,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,7 +97,6 @@ fun CrashLogListContent(
     onTypeFilterChange: (CrashTypeFilter) -> Unit,
     onGroupExpand: (String) -> Unit = {},
     onToggleAiSearch: () -> Unit = {},
-    onDismissAiTooltip: () -> Unit = {},
     onSuggestedPromptClick: (String) -> Unit = {},
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -139,7 +134,6 @@ fun CrashLogListContent(
             },
             onGroupExpand = onGroupExpand,
             onToggleAiSearch = onToggleAiSearch,
-            onDismissAiTooltip = onDismissAiTooltip,
             onSuggestedPromptClick = onSuggestedPromptClick
         )
     }
@@ -476,7 +470,6 @@ fun CrashLogList(
     showSortSheet: () -> Unit,
     onGroupExpand: (String) -> Unit = {},
     onToggleAiSearch: () -> Unit = {},
-    onDismissAiTooltip: () -> Unit = {},
     onSuggestedPromptClick: (String) -> Unit = {},
 ) {
     LazyColumn(
@@ -499,10 +492,8 @@ fun CrashLogList(
                 isAiSearchEnabled = uiState.isAiSearchEnabled,
                 isAiSearchAvailable = uiState.isAiSearchAvailable,
                 isParsingQuery = uiState.isParsingQuery,
-                showAiTooltip = uiState.showAiTooltip,
                 suggestedPrompts = uiState.suggestedPrompts,
                 onToggleAiSearch = onToggleAiSearch,
-                onDismissTooltip = onDismissAiTooltip,
                 onSuggestedPromptClick = onSuggestedPromptClick
             )
         }
@@ -707,26 +698,14 @@ private fun Search(
     isAiSearchEnabled: Boolean,
     isAiSearchAvailable: Boolean,
     isParsingQuery: Boolean,
-    showAiTooltip: Boolean,
     suggestedPrompts: List<String>,
     onToggleAiSearch: () -> Unit,
-    onDismissTooltip: () -> Unit,
     onSuggestedPromptClick: (String) -> Unit,
 ) {
     var isHintDisplayed by remember {
         mutableStateOf(true)
     }
     val focusManager = LocalFocusManager.current
-    val tooltipState = rememberTooltipState()
-    val scope = rememberCoroutineScope()
-
-    // Show tooltip when needed
-    if (showAiTooltip && isAiSearchAvailable) {
-        scope.launch {
-            tooltipState.show()
-            onDismissTooltip()
-        }
-    }
 
     Column {
         Box(modifier = Modifier.background(Color.Transparent)) {
@@ -818,39 +797,29 @@ private fun Search(
 
                         // AI toggle button (only show if available)
                         if (isAiSearchAvailable) {
-                            TooltipBox(
-                                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                                tooltip = {
-                                    PlainTooltip {
-                                        Text("AI-powered search")
-                                    }
-                                },
-                                state = tooltipState
-                            ) {
-                                IconButton(
-                                    onClick = onToggleAiSearch,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(
-                                            color = if (isAiSearchEnabled)
-                                                scheme.primaryContainer
-                                            else
-                                                Color.Transparent,
-                                            shape = CircleShape
-                                        ),
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        contentColor = if (isAiSearchEnabled)
-                                            scheme.onPrimaryContainer
+                            IconButton(
+                                onClick = onToggleAiSearch,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(
+                                        color = if (isAiSearchEnabled)
+                                            scheme.primaryContainer
                                         else
-                                            scheme.onSurfaceVariant
-                                    )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = if (isAiSearchEnabled) "Disable AI search" else "Enable AI search",
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                            Color.Transparent,
+                                        shape = CircleShape
+                                    ),
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    contentColor = if (isAiSearchEnabled)
+                                        scheme.onPrimaryContainer
+                                    else
+                                        scheme.onSurfaceVariant
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = if (isAiSearchEnabled) "Disable AI search" else "Enable AI search",
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
@@ -920,7 +889,6 @@ private fun CrashLogListContentPreview() {
             onSortOrderChange = {},
             onTypeFilterChange = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }
@@ -939,7 +907,6 @@ private fun CrashLogListContentDarkPreview() {
             onSortOrderChange = {},
             onTypeFilterChange = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }
@@ -958,7 +925,6 @@ private fun CrashLogListContentLoadingPreview() {
             onSortOrderChange = {},
             onTypeFilterChange = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }
@@ -977,7 +943,6 @@ private fun CrashLogListContentLoadingDarkPreview() {
             onSortOrderChange = {},
             onTypeFilterChange = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }
@@ -998,7 +963,6 @@ private fun EmptyStatePreview() {
             onSortOrderChange = {},
             onTypeFilterChange = {},
             onToggleAiSearch = {},
-            onDismissAiTooltip = {},
             onSuggestedPromptClick = {}
         )
     }
