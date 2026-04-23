@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -460,12 +459,13 @@ private fun MetadataMonoRow(label: String, value: String) {
             text = label,
             style = typo.bodySmall.copy(fontFamily = GoogleSansCode),
             color = scheme.onSurfaceVariant,
-            modifier = Modifier.width(115.dp),
+            modifier = Modifier.weight(0.4f),
         )
         Text(
             text = value,
             style = typo.bodyMedium.copy(fontFamily = GoogleSansCode),
             color = scheme.onSurface,
+            modifier = Modifier.weight(0.6f),
         )
     }
 }

@@ -100,6 +100,7 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.webkit)
     testImplementation(libs.coroutines.test)
 
     // Firebase

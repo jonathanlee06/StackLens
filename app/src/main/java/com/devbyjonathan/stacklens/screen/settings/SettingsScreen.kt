@@ -52,6 +52,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -76,8 +77,6 @@ fun SettingsScreen(
     onDynamicColorChange: (Boolean) -> Unit,
     onTermsClick: () -> Unit,
     onPrivacyClick: () -> Unit,
-    onRetentionClick: () -> Unit = {},
-    onResolvedCrashesClick: () -> Unit = {},
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAppInfoDialog by remember { mutableStateOf(false) }
@@ -373,7 +372,13 @@ private fun ThemeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose theme") },
+        title = {
+            Text(
+                text = "Choose theme",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp
+            )
+        },
         text = {
             Column(modifier = Modifier.selectableGroup()) {
                 ThemeMode.entries.forEach { mode ->
@@ -395,6 +400,7 @@ private fun ThemeSelectionDialog(
                         Text(
                             text = themeSubtitle(mode),
                             style = typo.bodyLarge,
+                            fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(start = 16.dp),
                         )
                     }
@@ -403,7 +409,7 @@ private fun ThemeSelectionDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Cancel", fontWeight = FontWeight.Medium)
             }
         },
     )
@@ -465,15 +471,18 @@ private fun InfoRow(label: String, value: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
+            modifier = Modifier.weight(0.3f),
             text = label,
             style = typo.bodyMedium,
             color = scheme.onSurfaceVariant,
             fontFamily = GoogleSansCode,
         )
         Text(
+            modifier = Modifier.weight(0.7f),
             text = value,
             style = typo.bodyMedium,
             fontFamily = GoogleSansCode,
+            textAlign = TextAlign.End
         )
     }
 }
