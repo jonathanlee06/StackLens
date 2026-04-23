@@ -10,8 +10,18 @@ import com.devbyjonathan.stacklens.service.CrashLogReader
 import com.devbyjonathan.stacklens.service.CrashSignatureGenerator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class DayBucket(val dayStartMs: Long, val count: Int)
+
+data class EventsTrend(
+    val current: Int,
+    val previous: Int,
+    val deltaPercent: Float,
+    val buckets: List<DayBucket>,
+)
 
 @Singleton
 class CrashLogRepository @Inject constructor(
@@ -28,11 +38,23 @@ class CrashLogRepository @Inject constructor(
         // Clean up old entries first
         cleanupOldEntries()
 
+        // Resolve time window: custom range overrides timeRangeHours when set.
+        val now = System.currentTimeMillis()
+        val (sinceTimestamp, untilTimestamp) = filter.customTimeRange?.let {
+            it.startMs to it.endMs
+        } ?: (now - (filter.timeRangeHours * 60 * 60 * 1000L) to now)
+
+        // DropBoxManager reads use sinceHours; for a custom range, read from the window
+        // start up to "now" (DropBoxManager can't read future entries anyway).
+        val readSinceHours = ((now - sinceTimestamp) / (60 * 60 * 1000L))
+            .toInt()
+            .coerceAtLeast(1)
+
         // Read fresh crashes from DropBox
         val freshLogs = try {
             crashLogReader.readCrashLogs(
                 types = filter.types.toList(),
-                sinceHours = filter.timeRangeHours
+                sinceHours = readSinceHours
             )
         } catch (e: SecurityException) {
             // Permission not granted - return only persisted data
@@ -45,8 +67,6 @@ class CrashLogRepository @Inject constructor(
             crashLogDao.insertAll(entities)
         }
 
-        // Calculate time range for query
-        val sinceTimestamp = System.currentTimeMillis() - (filter.timeRangeHours * 60 * 60 * 1000L)
         val tags = filter.types.map { it.tag }
 
         // Get persisted crashes within time range
@@ -56,6 +76,7 @@ class CrashLogRepository @Inject constructor(
         // Merge and deduplicate (ID is timestamp-based, so duplicates have same ID)
         val allLogs = (freshLogs + persistedLogs)
             .distinctBy { it.id }
+            .filter { it.timestamp in sinceTimestamp..untilTimestamp }
             .sortedByDescending { it.timestamp }
 
         return allLogs.filter { log ->
@@ -71,12 +92,28 @@ class CrashLogRepository @Inject constructor(
                         log.appName?.contains(query, ignoreCase = true) == true
             } ?: true
 
-            matchesPackage && matchesSearch
+            // Filter-sheet category selection (empty set == no restriction)
+            val matchesCategory = filter.selectedCategories.isEmpty() ||
+                    filter.selectedCategories.any { log.tag in it.crashTypes }
+
+            // Filter-sheet package selection (empty set == no restriction)
+            val matchesSheetPackage = filter.selectedPackages.isEmpty() ||
+                    (log.packageName != null && log.packageName in filter.selectedPackages)
+
+            matchesPackage && matchesSearch && matchesCategory && matchesSheetPackage
         }
     }
 
     fun getCrashLogsFlow(filter: CrashFilter): Flow<List<CrashLog>> = flow {
         emit(getCrashLogs(filter))
+    }
+
+    /**
+     * Look up a single persisted crash by its id. Used to re-hydrate the
+     * detail screen after the process was killed.
+     */
+    suspend fun getCrashById(id: Long): CrashLog? {
+        return crashLogDao.getCrashById(id)?.toCrashLog()
     }
 
     /**
@@ -146,6 +183,66 @@ class CrashLogRepository @Inject constructor(
                 )
             }
             .sortedByDescending { it.lastOccurrence }
+    }
+
+    /**
+     * Compute an events-over-time summary: daily counts for the current [days]-day window
+     * plus a percentage delta vs the prior equal-length window.
+     *
+     * `buckets` is ordered oldest → newest and length == days. Missing days are returned
+     * with count = 0 so the sparkline can render a flat baseline.
+     */
+    suspend fun getEventsTrend(days: Int = 7): EventsTrend {
+        cleanupOldEntries()
+
+        val now = System.currentTimeMillis()
+        val dayMs = 24L * 60 * 60 * 1000
+        val windowMs = days * dayMs
+
+        val fromTimestamp = now - (2 * windowMs)
+        val tags = CrashType.entries.map { it.tag }
+        val logs = crashLogDao.getCrashesByTagsSince(tags, fromTimestamp)
+
+        val currentStart = now - windowMs
+        val previousStart = now - (2 * windowMs)
+        var current = 0
+        var previous = 0
+        for (log in logs) {
+            when {
+                log.timestamp >= currentStart -> current++
+                log.timestamp >= previousStart -> previous++
+            }
+        }
+
+        val startOfToday = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val countsByDay = HashMap<Long, Int>()
+        for (log in logs) {
+            if (log.timestamp < currentStart) continue
+            val bucketOffsetDays = ((startOfToday - log.timestamp) / dayMs).coerceAtLeast(0)
+            val bucketStart = startOfToday - (bucketOffsetDays * dayMs)
+            countsByDay[bucketStart] = (countsByDay[bucketStart] ?: 0) + 1
+        }
+        val buckets = (days - 1 downTo 0).map { offset ->
+            val dayStart = startOfToday - (offset * dayMs)
+            DayBucket(dayStart, countsByDay[dayStart] ?: 0)
+        }
+
+        val delta = if (previous == 0) {
+            if (current == 0) 0f else 100f
+        } else {
+            (current - previous) / previous.toFloat() * 100f
+        }
+        return EventsTrend(
+            current = current,
+            previous = previous,
+            deltaPercent = delta,
+            buckets = buckets
+        )
     }
 
     /**

@@ -10,18 +10,28 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.devbyjonathan.stacklens.ai.CrashInsightService
 import com.devbyjonathan.stacklens.navigation.Screen
+import com.devbyjonathan.stacklens.screen.detail.AiInsightScreen
 import com.devbyjonathan.stacklens.screen.detail.CrashDetailScreen
 import com.devbyjonathan.stacklens.screen.list.CrashLogViewModel
 import com.devbyjonathan.stacklens.screen.permission.PermissionScreen
@@ -147,7 +157,7 @@ class MainActivity : ComponentActivity() {
                             onSearchQueryChange = { vm.setSearchQuery(it) },
                             onCrashClick = { crash ->
                                 vm.selectCrash(crash)
-                                navController.navigate(Screen.CrashDetail.route)
+                                navController.navigate(Screen.CrashDetail.buildRoute(crash.id))
                             },
                             onTimeRangeChange = { vm.setTimeRange(it) },
                             onSortOrderChange = { vm.setSortOrder(it) },
@@ -156,17 +166,114 @@ class MainActivity : ComponentActivity() {
                             onThemeChange = { themeManager.setThemeMode(it) },
                             onDynamicColorChange = { themeManager.setDynamicColorEnabled(it) },
                             onTermsClick = { navController.navigate(Screen.Terms.route) },
-                            onPrivacyClick = { navController.navigate(Screen.Privacy.route) }
+                            onPrivacyClick = { navController.navigate(Screen.Privacy.route) },
+                            onToggleAiSearch = { vm.toggleAiSearchMode() },
+                            onSuggestedPromptClick = { vm.applySuggestedPrompt(it) },
+                            onApplyFilterSheet = { hours, custom, categories, packages ->
+                                vm.applyFilterSheet(hours, custom, categories, packages)
+                            }
                         )
                     }
 
-                    composable(Screen.CrashDetail.route) {
-                        selectedCrash?.let { crash ->
-                            CrashDetailScreen(
-                                crash = crash,
-                                onBackClick = { navController.popBackStack() },
-                                crashInsightService = crashInsightService
-                            )
+                    composable(
+                        route = Screen.CrashDetail.route,
+                        arguments = listOf(
+                            navArgument(Screen.CrashDetail.ARG_CRASH_ID) {
+                                type = NavType.LongType
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val crashId = backStackEntry.arguments
+                            ?.getLong(Screen.CrashDetail.ARG_CRASH_ID)
+
+                        LaunchedEffect(crashId) {
+                            crashId?.let { vm.ensureSelectedCrash(it) }
+                        }
+
+                        val resolved = selectedCrash?.takeIf { it.id == crashId }
+                        val loading by vm.isLoadingSelectedCrash.collectAsState()
+
+                        when {
+                            resolved != null -> {
+                                CrashDetailScreen(
+                                    crash = resolved,
+                                    onBackClick = { navController.popBackStack() },
+                                    crashInsightService = crashInsightService,
+                                    onAiInsightClick = {
+                                        navController.navigate(Screen.AiInsight.buildRoute(resolved.id))
+                                    }
+                                )
+                            }
+
+                            loading || crashId == null -> {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+
+                            else -> {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Crash no longer available.")
+                                }
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
+                            }
+                        }
+                    }
+
+                    composable(
+                        route = Screen.AiInsight.route,
+                        arguments = listOf(
+                            navArgument(Screen.AiInsight.ARG_CRASH_ID) {
+                                type = NavType.LongType
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val crashId = backStackEntry.arguments
+                            ?.getLong(Screen.AiInsight.ARG_CRASH_ID)
+
+                        LaunchedEffect(crashId) {
+                            crashId?.let { vm.ensureSelectedCrash(it) }
+                        }
+
+                        val resolved = selectedCrash?.takeIf { it.id == crashId }
+                        val loading by vm.isLoadingSelectedCrash.collectAsState()
+                        val similarCount = resolved?.let { crash ->
+                            uiState.crashGroups.firstOrNull { it.latestCrash.id == crash.id }?.count
+                                ?: 1
+                        } ?: 1
+
+                        when {
+                            resolved != null -> {
+                                AiInsightScreen(
+                                    crash = resolved,
+                                    similarCount = similarCount,
+                                    crashInsightService = crashInsightService,
+                                    onBackClick = { navController.popBackStack() },
+                                )
+                            }
+
+                            loading || crashId == null -> {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+
+                            else -> {
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
+                            }
                         }
                     }
 

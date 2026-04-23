@@ -9,7 +9,7 @@ import com.devbyjonathan.stacklens.data.local.entity.CrashLogEntity
 
 @Database(
     entities = [CrashLogEntity::class, CrashInsightEntity::class],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class StackLensDatabase : RoomDatabase() {

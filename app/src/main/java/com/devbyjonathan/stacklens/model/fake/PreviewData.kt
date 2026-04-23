@@ -1,8 +1,13 @@
 package com.devbyjonathan.stacklens.model.fake
 
+import com.devbyjonathan.stacklens.ai.CrashInsight
+import com.devbyjonathan.stacklens.ai.Severity
 import com.devbyjonathan.stacklens.model.CrashFilter
+import com.devbyjonathan.stacklens.model.CrashGroup
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
+import com.devbyjonathan.stacklens.repository.DayBucket
+import com.devbyjonathan.stacklens.repository.EventsTrend
 import com.devbyjonathan.stacklens.screen.list.CrashLogUiState
 
 object PreviewData {
@@ -95,6 +100,39 @@ object PreviewData {
         CrashType.SYSTEM_TOMBSTONE to 2
     )
 
+    val sampleInsight = CrashInsight(
+        title = "Unhandled exception in a Compose tap lambda",
+        summary = "The app crashes due to an unhandled exception within a Compose lambda related to a tap gesture.",
+        rootCause = "The crash occurs within a nested Compose lambda during tap-gesture detection. The gesture handler propagates an unexpected exception to the composition root.",
+        suggestedFix = "Wrap the gesture lambda in runCatching or use Compose's error boundary.",
+        affectedLine = "MainActivity.kt:29",
+        severity = Severity.HIGH,
+        confidence = 0.91f,
+    )
+
+    val sampleCrashGroup = CrashGroup(
+        signature = "RuntimeException:data_app_crash:abc123",
+        exceptionType = "RuntimeException",
+        crashes = listOf(sampleCrashLogs.first()),
+        count = 12,
+        firstOccurrence = currentTime - 1000 * 60 * 60 * 24,
+        lastOccurrence = currentTime - 1000 * 60 * 5,
+    )
+
+    val sampleEventsTrend: EventsTrend = run {
+        val dayMs = 24L * 60 * 60 * 1000
+        val today = (currentTime / dayMs) * dayMs
+        val counts = listOf(2, 1, 4, 3, 5, 4, 4)
+        EventsTrend(
+            current = counts.sum(),
+            previous = 17,
+            deltaPercent = 35.3f,
+            buckets = counts.mapIndexed { idx, c ->
+                DayBucket(today - ((counts.size - 1 - idx) * dayMs), c)
+            },
+        )
+    }
+
     val sampleUiState = CrashLogUiState(
         isLoading = false,
         hasPermissions = true,
@@ -104,6 +142,7 @@ object PreviewData {
         crashLogs = sampleCrashLogs,
         stats = sampleStats,
         filter = CrashFilter(),
-        error = null
+        error = null,
+        eventsTrend = sampleEventsTrend,
     )
 }

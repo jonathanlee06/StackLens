@@ -14,6 +14,10 @@ import com.devbyjonathan.stacklens.R
 import com.devbyjonathan.stacklens.data.local.dao.CrashInsightDao
 import com.devbyjonathan.stacklens.data.local.entity.CrashInsightEntity
 import com.devbyjonathan.stacklens.model.CrashLog
+import com.devbyjonathan.stacklens.model.CrashTypeFilter
+import com.devbyjonathan.stacklens.model.SortOrder
+import com.devbyjonathan.stacklens.service.CrashSignatureGenerator
+import com.devbyjonathan.stacklens.util.countAppFrames
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
@@ -22,21 +26,30 @@ import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class Severity { LOW, MEDIUM, HIGH }
+
 data class CrashInsight(
+    val title: String,
     val summary: String,
     val rootCause: String,
     val suggestedFix: String,
     val affectedLine: String?,
+    val severity: Severity = Severity.MEDIUM,
+    val confidence: Float = 0.7f,
 )
 
 sealed class InsightResult {
@@ -55,10 +68,25 @@ sealed class DownloadState {
     data class Failed(val error: String) : DownloadState()
 }
 
+data class ParsedSearchQuery(
+    val timeRangeHours: Int? = null,
+    val typeFilter: CrashTypeFilter? = null,
+    val searchQuery: String? = null,
+    val packageName: String? = null,
+    val sortOrder: SortOrder? = null,
+)
+
+sealed class ParseResult {
+    data class Success(val query: ParsedSearchQuery) : ParseResult()
+    data class Fallback(val originalQuery: String) : ParseResult()
+    data object Unavailable : ParseResult()
+}
+
 @Singleton
 class CrashInsightService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val crashInsightDao: CrashInsightDao,
+    private val signatureGenerator: CrashSignatureGenerator,
 ) {
     private var generativeModel: GenerativeModel? = null
 
@@ -69,6 +97,9 @@ class CrashInsightService @Inject constructor(
 
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
+
+    private val inFlightMutex = Mutex()
+    private val inFlight = mutableMapOf<Long, Deferred<InsightResult>>()
 
     companion object {
         private const val TAG = "CrashInsightService"
@@ -291,8 +322,41 @@ class CrashInsightService @Inject constructor(
     /**
      * Analyze a crash log and return AI-powered insights.
      * First checks for cached insight, otherwise calls AI and caches the result.
+     * Concurrent calls for the same crash id share a single in-flight generation.
+     *
+     * @param groupCount number of occurrences of this crash pattern; feeds into the
+     *                   deterministic confidence heuristic.
      */
-    suspend fun analyzeCrash(crash: CrashLog): InsightResult = withContext(Dispatchers.IO) {
+    suspend fun analyzeCrash(crash: CrashLog, groupCount: Int = 1): InsightResult {
+        val deferred = inFlightMutex.withLock {
+            inFlight[crash.id] ?: serviceScope.async {
+                doAnalyzeCrash(crash, groupCount)
+            }.also { job ->
+                inFlight[crash.id] = job
+                job.invokeOnCompletion {
+                    serviceScope.launch {
+                        inFlightMutex.withLock { inFlight.remove(crash.id) }
+                    }
+                }
+            }
+        }
+        return deferred.await()
+    }
+
+    /**
+     * Kick off analysis in the background so the insight is cached by the time
+     * the user opens the AI screen. Safe to call multiple times — in-flight
+     * dedupe ensures only one generation runs per crash id.
+     */
+    fun preloadInsight(crash: CrashLog, groupCount: Int = 1) {
+        serviceScope.launch {
+            runCatching { analyzeCrash(crash, groupCount) }
+                .onFailure { Log.w(TAG, "preloadInsight failed for crash ${crash.id}", it) }
+        }
+    }
+
+    private suspend fun doAnalyzeCrash(crash: CrashLog, groupCount: Int): InsightResult =
+        withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Starting crash analysis for: ${crash.packageName} (id=${crash.id})")
 
@@ -353,7 +417,7 @@ class CrashInsightService @Inject constructor(
             }
 
             Log.d(TAG, "AI Response received (${text.length} chars):\n$text")
-            val result = parseInsightResponse(text)
+            val result = parseInsightResponse(text, crash, groupCount)
 
             // Cache successful insight
             if (result is InsightResult.Success) {
@@ -398,6 +462,8 @@ $stackTrace
 
 Respond in this exact format:
 
+TITLE: [A short 4–8 word headline naming the issue — noun phrase, no trailing punctuation]
+
 SUMMARY: [One sentence explaining what happened]
 
 ROOT_CAUSE: [The specific cause of the crash]
@@ -405,10 +471,16 @@ ROOT_CAUSE: [The specific cause of the crash]
 SUGGESTED_FIX: [How to fix this issue]
 
 AFFECTED_LINE: [The key line from the stack trace, or N/A]
+
+SEVERITY: [HIGH, MEDIUM, or LOW — judge user-facing impact]
 """.trimIndent()
     }
 
-    private fun parseInsightResponse(response: String): InsightResult {
+    private fun parseInsightResponse(
+        response: String,
+        crash: CrashLog,
+        groupCount: Int,
+    ): InsightResult {
         try {
             val summary = extractSection(response, "SUMMARY:") ?: "Unable to determine summary"
             val rootCause =
@@ -416,15 +488,36 @@ AFFECTED_LINE: [The key line from the stack trace, or N/A]
             val suggestedFix = extractSection(response, "SUGGESTED_FIX:") ?: "Unable to suggest fix"
             val affectedLine = extractSection(response, "AFFECTED_LINE:")?.takeIf {
                 it.isNotBlank() && !it.equals("N/A", ignoreCase = true)
-            }
+            }?.trim()
+            val severity = parseSeverity(extractSection(response, "SEVERITY:"))
+            val title = extractSection(response, "TITLE:")
+                ?.trim()
+                ?.trimEnd('.', ',', ';', ':')
+                ?.takeIf { it.isNotBlank() }
+                ?: deriveFallbackTitle(summary)
 
-            Log.d(TAG, "Parsed insight - Summary: ${summary.take(50)}...")
+            val exceptionType = signatureGenerator.extractExceptionType(crash.content, crash.tag)
+            val appFrames = countAppFrames(crash.content)
+            val confidence = computeConfidence(
+                exceptionType = exceptionType,
+                affectedLine = affectedLine,
+                appFrameCount = appFrames,
+                groupCount = groupCount,
+            )
+
+            Log.d(
+                TAG,
+                "Parsed insight — title='${title.take(40)}' severity=$severity confidence=$confidence appFrames=$appFrames groupCount=$groupCount"
+            )
             return InsightResult.Success(
                 CrashInsight(
+                    title = title,
                     summary = summary.trim(),
                     rootCause = rootCause.trim(),
                     suggestedFix = suggestedFix.trim(),
-                    affectedLine = affectedLine?.trim()
+                    affectedLine = affectedLine,
+                    severity = severity,
+                    confidence = confidence,
                 )
             )
         } catch (e: Exception) {
@@ -433,12 +526,56 @@ AFFECTED_LINE: [The key line from the stack trace, or N/A]
         }
     }
 
+    /**
+     * Last-resort title if the model omits TITLE or emits blank. Take the first clause of the
+     * summary up to ~8 words.
+     */
+    private fun deriveFallbackTitle(summary: String): String {
+        val firstClause = summary.substringBefore('.').substringBefore(';').trim()
+        val words = firstClause.split(Regex("\\s+")).filter { it.isNotBlank() }
+        return if (words.size <= 8) firstClause else words.take(8).joinToString(" ")
+    }
+
+    private fun parseSeverity(raw: String?): Severity {
+        return when (raw?.trim()?.uppercase()) {
+            "HIGH" -> Severity.HIGH
+            "LOW" -> Severity.LOW
+            "MEDIUM", "MED" -> Severity.MEDIUM
+            else -> Severity.MEDIUM
+        }
+    }
+
+    /**
+     * Deterministic confidence in [0f, 1f]. Pure function of parse quality + trace shape +
+     * how often this pattern recurs. No probing of model internals.
+     */
+    internal fun computeConfidence(
+        exceptionType: String,
+        affectedLine: String?,
+        appFrameCount: Int,
+        groupCount: Int,
+    ): Float {
+        var score = 0.50f
+        if (exceptionType != "UnknownException") score += 0.15f
+        if (affectedLine != null) score += 0.10f
+        score += 0.05f * minOf(4, appFrameCount)
+        if (groupCount >= 3) score += 0.05f
+        return score.coerceIn(0f, 1f)
+    }
+
     private fun extractSection(text: String, marker: String): String? {
         val startIndex = text.indexOf(marker, ignoreCase = true)
         if (startIndex == -1) return null
 
         val contentStart = startIndex + marker.length
-        val markers = listOf("SUMMARY:", "ROOT_CAUSE:", "SUGGESTED_FIX:", "AFFECTED_LINE:")
+        val markers = listOf(
+            "TITLE:",
+            "SUMMARY:",
+            "ROOT_CAUSE:",
+            "SUGGESTED_FIX:",
+            "AFFECTED_LINE:",
+            "SEVERITY:"
+        )
         val nextMarkerIndex = markers
             .filter { !it.equals(marker, ignoreCase = true) }
             .mapNotNull { nextMarker ->
@@ -448,5 +585,135 @@ AFFECTED_LINE: [The key line from the stack trace, or N/A]
             .minOrNull() ?: text.length
 
         return text.substring(contentStart, nextMarkerIndex).trim()
+    }
+
+    /**
+     * Parse a natural language search query into structured filters.
+     * Returns Fallback if AI parsing fails or nothing meaningful is extracted.
+     */
+    suspend fun parseNaturalLanguageQuery(query: String): ParseResult =
+        withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Parsing natural language query: $query")
+
+                val model = getOrCreateModel()
+                val status = model.checkStatus()
+                currentStatus = status
+
+                if (status != FeatureStatus.AVAILABLE) {
+                    Log.d(TAG, "Gemini Nano not available for query parsing")
+                    return@withContext ParseResult.Unavailable
+                }
+
+                val prompt = buildQueryParsePrompt(query)
+                Log.d(TAG, "Query parse prompt built, length: ${prompt.length} chars")
+
+                val request = generateContentRequest(TextPart(prompt)) {
+                    temperature = 0.1f
+                    topK = 8
+                }
+
+                Log.d(TAG, "Calling generateContent for query parsing...")
+                val startTime = System.currentTimeMillis()
+                val response = model.generateContent(request)
+                val elapsed = System.currentTimeMillis() - startTime
+                Log.d(TAG, "Query parsing completed in ${elapsed}ms")
+
+                val text = response.candidates.firstOrNull()?.text
+                if (text == null) {
+                    Log.w(TAG, "Empty response for query parsing")
+                    return@withContext ParseResult.Fallback(query)
+                }
+
+                Log.d(TAG, "Query parse response:\n$text")
+                parseQueryResponse(text, query)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse natural language query", e)
+                ParseResult.Fallback(query)
+            }
+        }
+
+    private fun buildQueryParsePrompt(query: String): String {
+        return """
+Parse this crash log search query into structured filters.
+
+Query: "$query"
+
+Extract these fields if mentioned (use NONE if not mentioned):
+- TIME_RANGE: Number of hours (1, 6, 24, 72, 168). Map: "last hour"=1, "today"/"yesterday"=24, "3 days"=72, "week"=168
+- TYPE_FILTER: One of ALL, CRASHES, ANRS, NATIVE
+- SEARCH_QUERY: Exception names, error types (e.g., NullPointerException, OutOfMemory)
+- PACKAGE_HINT: App name or package mentioned (e.g., "Gmail", "Chrome")
+- SORT_ORDER: NEWEST_FIRST or OLDEST_FIRST
+
+Respond in this exact format:
+TIME_RANGE: [value or NONE]
+TYPE_FILTER: [value or NONE]
+SEARCH_QUERY: [value or NONE]
+PACKAGE_HINT: [value or NONE]
+SORT_ORDER: [value or NONE]
+""".trimIndent()
+    }
+
+    private fun parseQueryResponse(response: String, originalQuery: String): ParseResult {
+        try {
+            val timeRangeStr = extractQueryField(response, "TIME_RANGE:")
+            val typeFilterStr = extractQueryField(response, "TYPE_FILTER:")
+            val searchQueryStr = extractQueryField(response, "SEARCH_QUERY:")
+            val packageHintStr = extractQueryField(response, "PACKAGE_HINT:")
+            val sortOrderStr = extractQueryField(response, "SORT_ORDER:")
+
+            val timeRange = timeRangeStr?.toIntOrNull()
+            val typeFilter = when (typeFilterStr?.uppercase()) {
+                "ALL" -> CrashTypeFilter.ALL
+                "CRASHES" -> CrashTypeFilter.CRASHES
+                "ANRS" -> CrashTypeFilter.ANRS
+                "NATIVE" -> CrashTypeFilter.NATIVE
+                else -> null
+            }
+            val searchQuery = searchQueryStr?.takeIf { it.isNotBlank() }
+            val packageName = packageHintStr?.takeIf { it.isNotBlank() }
+            val sortOrder = when (sortOrderStr?.uppercase()) {
+                "NEWEST_FIRST" -> SortOrder.NEWEST_FIRST
+                "OLDEST_FIRST" -> SortOrder.OLDEST_FIRST
+                else -> null
+            }
+
+            // If nothing meaningful was extracted, fall back to text search
+            if (timeRange == null && typeFilter == null && searchQuery == null &&
+                packageName == null && sortOrder == null
+            ) {
+                Log.d(TAG, "No meaningful filters extracted, falling back to text search")
+                return ParseResult.Fallback(originalQuery)
+            }
+
+            val parsed = ParsedSearchQuery(
+                timeRangeHours = timeRange,
+                typeFilter = typeFilter,
+                searchQuery = searchQuery,
+                packageName = packageName,
+                sortOrder = sortOrder
+            )
+            Log.d(TAG, "Parsed query: $parsed")
+            return ParseResult.Success(parsed)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse query response", e)
+            return ParseResult.Fallback(originalQuery)
+        }
+    }
+
+    private fun extractQueryField(text: String, marker: String): String? {
+        val startIndex = text.indexOf(marker, ignoreCase = true)
+        if (startIndex == -1) return null
+
+        val contentStart = startIndex + marker.length
+        val lineEnd = text.indexOf('\n', contentStart).takeIf { it > 0 } ?: text.length
+        val value = text.substring(contentStart, lineEnd).trim()
+
+        return if (value.equals("NONE", ignoreCase = true) || value.isBlank()) {
+            null
+        } else {
+            value
+        }
     }
 }

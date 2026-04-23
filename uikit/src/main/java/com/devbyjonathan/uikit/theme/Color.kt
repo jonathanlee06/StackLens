@@ -1,5 +1,7 @@
 package com.devbyjonathan.uikit.theme
 
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 val primaryLight = Color(0xFF415F91)
@@ -73,3 +75,101 @@ val surfaceContainerLowDark = Color(0xFF191C20)
 val surfaceContainerDark = Color(0xFF1D2024)
 val surfaceContainerHighDark = Color(0xFF282A2F)
 val surfaceContainerHighestDark = Color(0xFF33353A)
+
+
+val StackLensLightColors = lightColorScheme(
+    // Primary — ink black (app's action color)
+    primary = Color(0xFF1C1A17),
+    onPrimary = Color(0xFFF6F3EE),
+    primaryContainer = Color(0xFFE5DFF7),  // AI violet tonal
+    onPrimaryContainer = Color(0xFF3F3176),
+
+    // Secondary — warm neutral
+    secondary = Color(0xFF6B655A),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFECE7DF),
+    onSecondaryContainer = Color(0xFF1C1A17),
+
+    // Tertiary — amber (Native crash)
+    tertiary = Color(0xFF7A5400),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFFDF9E),
+    onTertiaryContainer = Color(0xFF2A1C00),
+
+    // Error — crash red
+    error = Color(0xFFA8281A),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD5),
+    onErrorContainer = Color(0xFF410001),
+
+    // Background / Surface
+    background = Color(0xFFF6F3EE),
+    onBackground = Color(0xFF1C1A17),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF1C1A17),
+    surfaceVariant = Color(0xFFECE7DF),
+    onSurfaceVariant = Color(0xFF6B655A),
+    surfaceTint = Color(0xFF1C1A17),
+    inverseSurface = Color(0xFF1C1A17),
+    inverseOnSurface = Color(0xFFF6F3EE),
+    inversePrimary = Color(0xFFF0EAE1),
+
+    // Surface containers
+    surfaceDim = Color(0xFFE4DDD1),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF6F3EE),
+    surfaceContainer = Color(0xFFECE7DF),
+    surfaceContainerHigh = Color(0xFFE4DDD1),
+    surfaceContainerHighest = Color(0xFFDCD4C6),
+
+    // Outline
+    outline = Color(0xFF9C9589),
+    outlineVariant = Color(0xFFE0DACF),
+    scrim = Color(0xFF000000),
+)
+
+val StackLensDarkColors = darkColorScheme(
+    primary = Color(0xFFF0EAE1),
+    onPrimary = Color(0xFF191613),
+    primaryContainer = Color(0xFF342C6A),
+    onPrimaryContainer = Color(0xFFD9D2F5),
+
+    secondary = Color(0xFFA39A8C),
+    onSecondary = Color(0xFF191613),
+    secondaryContainer = Color(0xFF2C2722),
+    onSecondaryContainer = Color(0xFFF0EAE1),
+
+    tertiary = Color(0xFFFFC676),
+    onTertiary = Color(0xFF3A2C12),
+    tertiaryContainer = Color(0xFF4A3300),
+    onTertiaryContainer = Color(0xFFFFE08A),
+
+    error = Color(0xFFFF8975),
+    onError = Color(0xFF5A1812),
+    errorContainer = Color(0xFF5A1812),
+    onErrorContainer = Color(0xFFFFDAD5),
+
+    background = Color(0xFF191613),
+    onBackground = Color(0xFFF0EAE1),
+    surface = Color(0xFF221E1A),
+    onSurface = Color(0xFFF0EAE1),
+    surfaceVariant = Color(0xFF2C2722),
+    onSurfaceVariant = Color(0xFFA39A8C),
+    surfaceTint = Color(0xFFF0EAE1),
+    inverseSurface = Color(0xFFF0EAE1),
+    inverseOnSurface = Color(0xFF191613),
+    inversePrimary = Color(0xFF1C1A17),
+
+    surfaceDim = Color(0xFF191613),
+    surfaceBright = Color(0xFF38312A),
+    surfaceContainerLowest = Color(0xFF120F0C),
+    surfaceContainerLow = Color(0xFF221E1A),
+    surfaceContainer = Color(0xFF2C2722),
+    surfaceContainerHigh = Color(0xFF38312A),
+    surfaceContainerHighest = Color(0xFF433B32),
+
+    outline = Color(0xFF6A6257),
+    outlineVariant = Color(0xFF39322B),
+    scrim = Color(0xFF000000),
+)

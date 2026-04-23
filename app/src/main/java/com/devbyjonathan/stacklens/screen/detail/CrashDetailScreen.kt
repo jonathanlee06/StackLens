@@ -1,11 +1,10 @@
 package com.devbyjonathan.stacklens.screen.detail
 
 import android.content.Intent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,12 +18,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
@@ -34,18 +32,18 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,14 +61,20 @@ import androidx.compose.ui.unit.sp
 import com.devbyjonathan.stacklens.ai.CrashInsightService
 import com.devbyjonathan.stacklens.ai.DownloadState
 import com.devbyjonathan.stacklens.ai.InsightResult
-import com.devbyjonathan.stacklens.common.CrashTypeBadge
+import com.devbyjonathan.stacklens.common.CrashBreadcrumb
+import com.devbyjonathan.stacklens.common.CrashTypeBadgeDetail
 import com.devbyjonathan.stacklens.model.CrashLog
 import com.devbyjonathan.stacklens.model.CrashType
 import com.devbyjonathan.stacklens.theme.StackLensTheme
+import com.devbyjonathan.stacklens.util.CrashMetadata
+import com.devbyjonathan.stacklens.util.MarkdownText
 import com.devbyjonathan.stacklens.util.StackTraceColors
 import com.devbyjonathan.stacklens.util.highlightStackTrace
+import com.devbyjonathan.stacklens.util.parseCrashMetadata
 import com.devbyjonathan.uikit.theme.AppTypography
-import kotlinx.coroutines.launch
+import com.devbyjonathan.uikit.theme.GoogleSansCode
+import com.devbyjonathan.uikit.theme.scheme
+import com.devbyjonathan.uikit.theme.typo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,98 +85,90 @@ fun CrashDetailScreen(
     crash: CrashLog,
     onBackClick: () -> Unit,
     crashInsightService: CrashInsightService? = null,
+    onAiInsightClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
-    var wrapText by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    var aiAvailable by remember { mutableStateOf<Boolean?>(null) }
+    var aiAvailable by remember { mutableStateOf<Boolean>(false) }
     var insightResult by remember { mutableStateOf<InsightResult?>(null) }
-    var showInsight by remember { mutableStateOf(false) }
     val downloadState by crashInsightService?.downloadState?.collectAsState()
         ?: remember { mutableStateOf(DownloadState.Idle) }
 
-    LaunchedEffect(crashInsightService) {
+    LaunchedEffect(crashInsightService, crash.id) {
         crashInsightService?.let {
-            // Check if AI is available or downloadable (show button for both)
             val available = it.isAvailable()
             val status = it.getStatus()
             aiAvailable =
                 available || status == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE
                         || status == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING
 
-            // Check for cached insight and auto-expand if available
             val cachedInsight = it.getCachedInsight(crash.id)
             if (cachedInsight != null) {
                 insightResult = InsightResult.Success(cachedInsight)
-                showInsight = true
             }
         }
     }
 
-    // Auto-retry when download completes
-    LaunchedEffect(downloadState) {
-        if (downloadState is DownloadState.Completed && insightResult is InsightResult.Downloading) {
-            // Download completed, retry the analysis
+    LaunchedEffect(selectedTab, aiAvailable) {
+        if (selectedTab == 1 && insightResult == null && aiAvailable == true) {
             insightResult = InsightResult.Loading
             insightResult = crashInsightService?.analyzeCrash(crash) ?: InsightResult.Unavailable
         }
     }
 
+    LaunchedEffect(downloadState) {
+        if (downloadState is DownloadState.Completed && insightResult is InsightResult.Downloading) {
+            insightResult = InsightResult.Loading
+            insightResult = crashInsightService?.analyzeCrash(crash) ?: InsightResult.Unavailable
+        }
+    }
+
+    CrashDetailScreenLayout(
+        crash = crash,
+        aiAvailable = aiAvailable,
+        onBackClick = onBackClick,
+        onAiInsightClick = onAiInsightClick,
+        onCopyLog = { clipboardManager.setText(AnnotatedString(crash.content)) },
+        onShareLog = {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "Crash Log: ${crash.packageName}")
+                putExtra(Intent.EXTRA_TEXT, crash.content)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share crash log"))
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CrashDetailScreenLayout(
+    crash: CrashLog,
+    aiAvailable: Boolean,
+    onBackClick: () -> Unit,
+    onAiInsightClick: (() -> Unit)?,
+    onCopyLog: () -> Unit,
+    onShareLog: () -> Unit,
+) {
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+    var wrapText by remember { mutableStateOf(false) }
+    val crashMeta = remember(crash.id) { parseCrashMetadata(crash.content) }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        modifier = Modifier.basicMarquee(),
-                        text = crash.appName ?: crash.packageName ?: "Crash Details",
-                        style = AppTypography.titleLarge.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        ),
-                        maxLines = 1
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (aiAvailable == true) {
-                        IconButton(
-                            onClick = {
-                                showInsight = !showInsight
-                                if (showInsight && insightResult == null) {
-                                    insightResult = InsightResult.Loading
-                                    scope.launch {
-                                        insightResult = crashInsightService?.analyzeCrash(crash)
-                                            ?: InsightResult.Unavailable
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = "AI Insight",
-                                tint = if (showInsight) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                    }
-                }
+            CrashBreadcrumb(
+                crashId = crash.id,
+                onBackClick = onBackClick,
             )
         },
         bottomBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(scheme.background)
                     .padding(16.dp)
                     .navigationBarsPadding(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -181,29 +177,29 @@ fun CrashDetailScreen(
                 Button(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        containerColor = scheme.surfaceContainer,
                     ),
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(crash.content))
-                    }
+                    onClick = onCopyLog,
                 ) {
                     Row(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
+                            modifier = Modifier.size(14.dp),
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "copy icon",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = scheme.onSurface
                         )
                         Text(
                             modifier = Modifier.basicMarquee(),
                             text = "Copy log",
                             style = AppTypography.bodyMedium.copy(
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
                             ),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = scheme.onSurface,
                             maxLines = 1
                         )
                     }
@@ -211,165 +207,266 @@ fun CrashDetailScreen(
                 Button(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = scheme.primary,
                     ),
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Crash Log: ${crash.packageName}")
-                            putExtra(Intent.EXTRA_TEXT, crash.content)
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Share crash log"))
-                    }
+                    onClick = onShareLog,
                 ) {
                     Row(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
+                            modifier = Modifier.size(14.dp),
                             imageVector = Icons.Default.Share,
                             contentDescription = "share icon",
-                            tint = MaterialTheme.colorScheme.primaryContainer
+                            tint = scheme.onPrimary
                         )
                         Text(
                             modifier = Modifier.basicMarquee(),
                             text = "Share Trace",
                             style = AppTypography.bodyMedium.copy(
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
                             ),
-                            color = MaterialTheme.colorScheme.primaryContainer,
+                            color = scheme.onPrimary,
                             maxLines = 1
                         )
                     }
                 }
             }
         },
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
         ) {
-            // AI Insight Card (collapsible)
-            AnimatedVisibility(
-                visible = showInsight,
-                enter = expandVertically(),
-                exit = shrinkVertically()
-            ) {
-                AiInsightCard(
-                    result = insightResult,
-                    downloadState = downloadState,
-                    onRetry = {
-                        insightResult = InsightResult.Loading
-                        scope.launch {
-                            insightResult = crashInsightService?.analyzeCrash(crash)
-                                ?: InsightResult.Unavailable
-                        }
-                    }
-                )
-            }
-
-            // Metadata card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Type:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(80.dp)
-                        )
-                        CrashTypeBadge(type = crash.tag)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    MetadataRow("Package", crash.packageName ?: "Unknown")
-                    MetadataRow("Time", dateFormat.format(Date(crash.timestamp)))
-                    crash.processName?.let { MetadataRow("Process", it) }
-                    crash.pid?.let { MetadataRow("PID", it.toString()) }
-                }
-            }
-
-            // Stack trace
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Stack Trace",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp
-                            )
-                        )
-                        IconButton(onClick = { wrapText = !wrapText }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.WrapText,
-                                contentDescription = if (wrapText) "Disable wrap" else "Enable wrap",
-                                tint = if (wrapText) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                    }
-
-                    // Syntax highlighting colors for stack trace
-                    val stackTraceColors = StackTraceColors(
-                        exception = MaterialTheme.colorScheme.error,
-                        causedBy = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                        atKeyword = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        className = MaterialTheme.colorScheme.onSurfaceVariant,
-                        methodName = MaterialTheme.colorScheme.primary,
-                        lineNumber = MaterialTheme.colorScheme.tertiary,
-                        fileName = MaterialTheme.colorScheme.secondary,
-                        nativeMethod = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        message = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
-                        default = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    val highlightedContent = highlightStackTrace(
-                        content = crash.content,
-                        colors = stackTraceColors
-                    )
-
-                    Box(
-                        modifier = if (wrapText) {
-                            Modifier.fillMaxWidth()
-                        } else {
-                            Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                        }
-                    ) {
-                        SelectionContainer {
-                            Text(
-                                text = highlightedContent,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
+            Spacer(modifier = Modifier.height(16.dp))
+            CrashTitleBlock(
+                crash = crash,
+                aiAvailable = aiAvailable,
+                onAiInsightClick = onAiInsightClick
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            StackTabContent(
+                crash = crash,
+                crashMeta = crashMeta,
+                wrapText = wrapText,
+                onToggleWrap = { wrapText = !wrapText },
+                dateFormat = dateFormat,
+            )
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun CrashTitleBlock(
+    crash: CrashLog,
+    aiAvailable: Boolean,
+    onAiInsightClick: (() -> Unit)?,
+) {
+    val exceptionLine = remember(crash.id) {
+        crash.content.lines().firstOrNull { line ->
+            line.contains("Exception") || line.contains("Error") || line.startsWith("Caused by:")
+        }?.trim()
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+        //.padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CrashTypeBadgeDetail(type = crash.tag, timestamp = crash.timestamp)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            modifier = Modifier.basicMarquee(),
+            text = crash.appName ?: crash.packageName ?: "Crash",
+            style = AppTypography.headlineMedium.copy(
+                fontWeight = FontWeight.Light,
+                fontSize = 28.sp
+            ),
+            maxLines = 1,
+        )
+        if (exceptionLine != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = exceptionLine,
+                style = typo.bodyMedium.copy(fontFamily = GoogleSansCode),
+                color = scheme.error,
+                maxLines = 2,
+            )
+        }
+        if (aiAvailable && onAiInsightClick != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.primaryContainer,
+                ),
+                onClick = onAiInsightClick
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        tint = scheme.onPrimaryContainer,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        modifier = Modifier.basicMarquee(),
+                        text = "AI Insight",
+                        style = AppTypography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                        ),
+                        color = scheme.onPrimaryContainer,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StackTabContent(
+    crash: CrashLog,
+    crashMeta: CrashMetadata,
+    wrapText: Boolean,
+    onToggleWrap: () -> Unit,
+    dateFormat: SimpleDateFormat,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(scheme.surface, RoundedCornerShape(16.dp))
+            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(16.dp)),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            MetadataMonoRow("package", crash.packageName ?: "—")
+            crash.processName?.let { MetadataMonoRow("process", it) }
+            MetadataMonoRow("time", dateFormat.format(Date(crash.timestamp)))
+            val pidUid = buildString {
+                append(crash.pid?.toString() ?: "—")
+                append(" / ")
+                append(crashMeta.uid?.toString() ?: "—")
+            }
+            MetadataMonoRow("pid / uid", pidUid)
+            crashMeta.systemUptimeMs?.let { MetadataMonoRow("SystemUptimeMs", it.toString()) }
+            crashMeta.foreground?.let {
+                MetadataMonoRow("Foreground", if (it) "Yes" else "No")
+            }
+            crashMeta.processRuntimeSec?.let {
+                MetadataMonoRow("Process-Runtime", it.toString())
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(scheme.surface, RoundedCornerShape(16.dp))
+            .border(1.dp, scheme.outlineVariant, RoundedCornerShape(16.dp)),
+    ) {
+        Column() {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Stack trace",
+                    style = typo.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    ),
+                )
+                IconButton(onClick = onToggleWrap) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.WrapText,
+                        contentDescription = if (wrapText) "Disable wrap" else "Enable wrap",
+                        tint = if (wrapText) scheme.primary
+                        else scheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            HorizontalDivider(thickness = 1.dp, color = scheme.outlineVariant)
+
+            val stackTraceColors = StackTraceColors(
+                exception = scheme.error,
+                causedBy = scheme.error.copy(alpha = 0.8f),
+                atKeyword = scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                className = scheme.onSurfaceVariant,
+                methodName = scheme.primary,
+                lineNumber = scheme.tertiary,
+                fileName = scheme.secondary,
+                nativeMethod = scheme.onSurfaceVariant.copy(alpha = 0.5f),
+                message = scheme.onSurfaceVariant.copy(alpha = 0.9f),
+                default = scheme.onSurfaceVariant,
+            )
+
+            val highlighted = highlightStackTrace(
+                content = crash.content,
+                colors = stackTraceColors,
+            )
+
+            Box(
+                modifier = if (wrapText) {
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .horizontalScroll(rememberScrollState())
+                }
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = highlighted,
+                        style = typo.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetadataMonoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = typo.bodySmall.copy(fontFamily = GoogleSansCode),
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.4f),
+        )
+        Text(
+            text = value,
+            style = typo.bodyMedium.copy(fontFamily = GoogleSansCode),
+            color = scheme.onSurface,
+            modifier = Modifier.weight(0.6f),
+        )
     }
 }
 
@@ -384,7 +481,7 @@ private fun AiInsightCard(
             .fillMaxWidth()
             .padding(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            containerColor = scheme.primaryContainer.copy(alpha = 0.3f)
         )
     ) {
         Column(
@@ -397,20 +494,20 @@ private fun AiInsightCard(
                 Icon(
                     Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = scheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
                     text = "AI Insight",
-                    style = MaterialTheme.typography.titleMedium.copy(
+                    style = typo.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = MaterialTheme.colorScheme.primary
+                    color = scheme.primary
                 )
                 Text(
                     text = "(Gemini Nano)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = typo.labelSmall,
+                    color = scheme.onSurfaceVariant
                 )
             }
 
@@ -423,16 +520,16 @@ private fun AiInsightCard(
                     ) {
                         Text(
                             text = "Analyzing crash...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = typo.bodyMedium,
+                            color = scheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         LinearProgressIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(4.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.primaryContainer
+                            color = scheme.primary,
+                            trackColor = scheme.primaryContainer
                         )
                     }
                 }
@@ -456,11 +553,11 @@ private fun AiInsightCard(
 
                         Text(
                             text = progressText,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = typo.bodyMedium,
                             color = if (downloadState is DownloadState.Failed) {
-                                MaterialTheme.colorScheme.error
+                                scheme.error
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                scheme.onSurfaceVariant
                             }
                         )
 
@@ -478,8 +575,8 @@ private fun AiInsightCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(4.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.primaryContainer
+                                    color = scheme.primary,
+                                    trackColor = scheme.primaryContainer
                                 )
                             }
 
@@ -489,8 +586,8 @@ private fun AiInsightCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(4.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.primaryContainer
+                                    color = scheme.primary,
+                                    trackColor = scheme.primaryContainer
                                 )
                             }
                         }
@@ -498,8 +595,8 @@ private fun AiInsightCard(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "This is a one-time download. You can leave the app - download will continue in background.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = typo.labelSmall,
+                            color = scheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedButton(
@@ -530,8 +627,8 @@ private fun AiInsightCard(
                     Column {
                         Text(
                             text = result.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
+                            style = typo.bodyMedium,
+                            color = scheme.error
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedButton(onClick = onRetry) {
@@ -543,16 +640,16 @@ private fun AiInsightCard(
                 is InsightResult.Unavailable -> {
                     Text(
                         text = "On-device AI is not available on this device. Requires Android 14+ with Gemini Nano support (Pixel 8+, Samsung S24+).",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = typo.bodyMedium,
+                        color = scheme.onSurfaceVariant
                     )
                 }
 
                 null -> {
                     Text(
                         text = "Tap to analyze this crash with on-device AI.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = typo.bodyMedium,
+                        color = scheme.onSurfaceVariant
                     )
                 }
             }
@@ -569,84 +666,105 @@ private fun InsightSection(
     Column {
         Text(
             text = title,
-            style = MaterialTheme.typography.labelMedium.copy(
+            style = typo.labelMedium.copy(
                 fontWeight = FontWeight.SemiBold
             ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = scheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = content,
-            style = if (isCode) {
-                MaterialTheme.typography.bodySmall.copy(
+        if (isCode) {
+            Text(
+                text = content,
+                style = typo.bodySmall.copy(
                     fontFamily = FontFamily.Monospace
-                )
-            } else {
-                MaterialTheme.typography.bodyMedium
-            },
-            color = MaterialTheme.colorScheme.onSurface
-        )
+                ),
+                color = scheme.onSurface
+            )
+        } else {
+            MarkdownText(
+                text = content,
+                style = typo.bodyMedium,
+                color = scheme.onSurface,
+            )
+        }
     }
 }
 
-@Composable
-fun MetadataRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Text(
-            text = "$label:",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(80.dp)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
-}
+private val sampleCrashPreview = CrashLog(
+    id = 1,
+    timestamp = System.currentTimeMillis(),
+    packageName = "com.example.app",
+    appName = "Example App",
+    processName = "com.example.app:service",
+    pid = 1234,
+    tag = CrashType.DATA_APP_CRASH,
+    content = """
+        FATAL EXCEPTION: main
+        Process: com.example.ecomm, PID: 23456
+        Caused by: java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.example.ecomm.data.model.Product.getName()' on a null object reference
+            at com.example.ecomm.ui.products.ProductDetailFragment.bindProductData(ProductDetailFragment.kt:145)
+            at com.example.ecomm.ui.products.ProductDetailFragment.access${'$'}bindProductData(ProductDetailFragment.kt:32)
+            at com.example.ecomm.ui.products.ProductDetailFragment${'$'}onViewCreated${'$'}1${'$'}1.emit(ProductDetailFragment.kt:88)
+            at com.example.ecomm.ui.products.ProductDetailFragment${'$'}onViewCreated${'$'}1${'$'}1.emit(ProductDetailFragment.kt:86)
+            at kotlinx.coroutines.flow.FlowKt__TransformKt${'$'}onEach${'$'}${'$'}inlined${'$'}unsafeTransform${'$'}1${'$'}2.emit(SafeCollector.common.kt:113)
+            at kotlinx.coroutines.flow.FlowKt__ChannelsKt.emitAllImpl${'$'}FlowKt__ChannelsKt(Channels.kt:51)
+            at kotlinx.coroutines.flow.FlowKt__ChannelsKt.emitAll(Channels.kt:37)
+            at kotlinx.coroutines.flow.FlowKt__ChannelsKt.access${'$'}emitAll(Channels.kt:1)
+            at kotlinx.coroutines.flow.FlowKt__ChannelsKt${'$'}emitAll${'$'}1.invokeSuspend(Unknown Source:11)
+            at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+            at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:106)
+            at android.os.Handler.handleCallback(Handler.java:938)
+            at android.os.Handler.dispatchMessage(Handler.java:99)
+            at android.os.Looper.loop(Looper.java:223)
+            at android.app.ActivityThread.main(ActivityThread.java:7656)
+            at java.lang.reflect.Method.invoke(Native Method)
+            at com.android.internal.os.RuntimeInit${'$'}MethodAndArgsCaller.run(RuntimeInit.java:592)
+            at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:947)
+            ...
+    """.trimIndent()
+)
 
-@Preview
+@Preview(showBackground = true)
 @Composable
 private fun CrashDetailScreenPreview() {
-    val sampleCrash = CrashLog(
-        id = 1,
-        timestamp = System.currentTimeMillis(),
-        packageName = "com.example.app",
-        appName = "Example App",
-        processName = "com.example.app:service",
-        pid = 1234,
-        tag = CrashType.DATA_APP_CRASH,
-        content = """
-            FATAL EXCEPTION: main
-            Process: com.example.ecomm, PID: 23456
-            Caused by: java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.example.ecomm.data.model.Product.getName()' on a null object reference
-                at com.example.ecomm.ui.products.ProductDetailFragment.bindProductData(ProductDetailFragment.kt:145)
-                at com.example.ecomm.ui.products.ProductDetailFragment.access${'$'}bindProductData(ProductDetailFragment.kt:32)
-                at com.example.ecomm.ui.products.ProductDetailFragment${'$'}onViewCreated${'$'}1${'$'}1.emit(ProductDetailFragment.kt:88)
-                at com.example.ecomm.ui.products.ProductDetailFragment${'$'}onViewCreated${'$'}1${'$'}1.emit(ProductDetailFragment.kt:86)
-                at kotlinx.coroutines.flow.FlowKt__TransformKt${'$'}onEach${'$'}${'$'}inlined${'$'}unsafeTransform${'$'}1${'$'}2.emit(SafeCollector.common.kt:113)
-                at kotlinx.coroutines.flow.FlowKt__ChannelsKt.emitAllImpl${'$'}FlowKt__ChannelsKt(Channels.kt:51)
-                at kotlinx.coroutines.flow.FlowKt__ChannelsKt.emitAll(Channels.kt:37)
-                at kotlinx.coroutines.flow.FlowKt__ChannelsKt.access${'$'}emitAll(Channels.kt:1)
-                at kotlinx.coroutines.flow.FlowKt__ChannelsKt${'$'}emitAll${'$'}1.invokeSuspend(Unknown Source:11)
-                at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
-                at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:106)
-                at android.os.Handler.handleCallback(Handler.java:938)
-                at android.os.Handler.dispatchMessage(Handler.java:99)
-                at android.os.Looper.loop(Looper.java:223)
-                at android.app.ActivityThread.main(ActivityThread.java:7656)
-                at java.lang.reflect.Method.invoke(Native Method)
-                at com.android.internal.os.RuntimeInit${'$'}MethodAndArgsCaller.run(RuntimeInit.java:592)
-                at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:947)
-                ...
-        """.trimIndent()
-    )
-
     StackLensTheme {
-        CrashDetailScreen(crash = sampleCrash, onBackClick = {})
+        CrashDetailScreenLayout(
+            crash = sampleCrashPreview,
+            aiAvailable = false,
+            onBackClick = {},
+            onAiInsightClick = null,
+            onCopyLog = {},
+            onShareLog = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CrashDetailScreenAiAvailablePreview() {
+    StackLensTheme {
+        CrashDetailScreenLayout(
+            crash = sampleCrashPreview,
+            aiAvailable = true,
+            onBackClick = {},
+            onAiInsightClick = {},
+            onCopyLog = {},
+            onShareLog = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun CrashDetailScreenAiAvailableDarkPreview() {
+    StackLensTheme {
+        CrashDetailScreenLayout(
+            crash = sampleCrashPreview,
+            aiAvailable = true,
+            onBackClick = {},
+            onAiInsightClick = {},
+            onCopyLog = {},
+            onShareLog = {},
+        )
     }
 }

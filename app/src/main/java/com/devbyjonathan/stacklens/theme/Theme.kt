@@ -1,7 +1,6 @@
 package com.devbyjonathan.stacklens.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -14,9 +13,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.devbyjonathan.stacklens.util.isAtLeastAndroid12
 import com.devbyjonathan.uikit.theme.AppTypography
-import com.devbyjonathan.uikit.theme.darkScheme
-import com.devbyjonathan.uikit.theme.lightScheme
+import com.devbyjonathan.uikit.theme.StackLensDarkColors
+import com.devbyjonathan.uikit.theme.StackLensLightColors
 
 @Composable
 fun StackLensTheme(
@@ -42,13 +42,13 @@ fun StackLensTheme(
     val dynamicColorState = themeManager?.dynamicColorEnabled?.collectAsState()
     val dynamicColorEnabled = dynamicColorState?.value ?: false
 
-    val useDynamicColor = dynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val useDynamicColor = dynamicColorEnabled && isAtLeastAndroid12()
 
     val colorScheme = when {
         useDynamicColor && effectiveDarkTheme -> dynamicDarkColorScheme(context)
         useDynamicColor && !effectiveDarkTheme -> dynamicLightColorScheme(context)
-        effectiveDarkTheme -> darkScheme
-        else -> lightScheme
+        effectiveDarkTheme -> StackLensDarkColors
+        else -> StackLensLightColors
     }
 
     // Get current view for window modifications
