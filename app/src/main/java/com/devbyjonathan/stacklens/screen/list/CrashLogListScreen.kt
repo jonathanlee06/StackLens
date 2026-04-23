@@ -134,7 +134,10 @@ fun CrashLogListContent(
             },
             onGroupExpand = onGroupExpand,
             onToggleAiSearch = onToggleAiSearch,
-            onSuggestedPromptClick = onSuggestedPromptClick
+            onSuggestedPromptClick = { prompt ->
+                searchQuery = prompt
+                onSuggestedPromptClick(prompt)
+            }
         )
     }
 
@@ -851,6 +854,7 @@ private fun SuggestedPromptsRow(
     ) {
         items(prompts) { prompt ->
             SuggestionChip(
+                shape = RoundedCornerShape(50.dp),
                 onClick = { onPromptClick(prompt) },
                 label = {
                     Text(
@@ -867,7 +871,7 @@ private fun SuggestedPromptsRow(
                     )
                 },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = scheme.surfaceContainerHigh,
+                    containerColor = scheme.surfaceContainer,
                     labelColor = scheme.onSurface,
                     iconContentColor = scheme.primary
                 )

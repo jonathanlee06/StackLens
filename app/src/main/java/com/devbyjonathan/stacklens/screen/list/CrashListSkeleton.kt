@@ -90,7 +90,7 @@ private fun CrashGroupSkeletonItem(
                     ShimmerBox(
                         modifier = Modifier
                             .width(36.dp)
-                            .height(16.dp),
+                            .height(22.dp),
                         shape = RoundedCornerShape(12.dp),
                     )
                 }
@@ -99,7 +99,7 @@ private fun CrashGroupSkeletonItem(
                 ShimmerBox(
                     modifier = Modifier
                         .fillMaxWidth(exceptionWidthFraction)
-                        .height(13.dp),
+                        .height(14.dp),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 // Package + type badge + chevron row.
@@ -116,7 +116,7 @@ private fun CrashGroupSkeletonItem(
                     ShimmerBox(
                         modifier = Modifier
                             .width(52.dp)
-                            .height(16.dp),
+                            .height(20.dp),
                         shape = RoundedCornerShape(4.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -130,7 +130,7 @@ private fun CrashGroupSkeletonItem(
                 ShimmerBox(
                     modifier = Modifier
                         .width(140.dp)
-                        .height(11.dp),
+                        .height(12.dp),
                 )
             }
         }
